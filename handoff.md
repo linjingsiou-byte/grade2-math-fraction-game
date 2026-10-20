@@ -20,6 +20,6 @@
 - 注意搶答鎖定機制（PVP buzz-in lock）之計時邏輯，避免動畫過渡期間重複點擊。
 
 ## 🕐 最後更新
-- 時間：2026-10-20 10:27
+- 時間：2026-10-20 11:15
 - 更新者：Google Antigravity @ LAPTOP-C73KGKMS
 - Git push：✅ 已推至 `linjingsiou-byte/grade2-math-fraction-game`
