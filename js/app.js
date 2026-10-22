@@ -1548,19 +1548,34 @@ const Game1Manager = {
       `;
     } else {
       AudioSynth.play('victory');
-      const winnerText = GameState.p1Score > GameState.p2Score ? '🐱 藍貓隊獲勝！' : '🐰 紅兔隊獲勝！';
-      const winnerEmoji = GameState.p1Score > GameState.p2Score ? '🐱' : '🐰';
+      let winnerBadge = '';
+      let winnerTitle = '';
+      let celebrationMsg = '';
+      
+      if (GameState.p1Score > GameState.p2Score) {
+        winnerBadge = '<div class="complete-badge" style="font-size: 6rem;">🐱</div>';
+        winnerTitle = `<h2 class="p1-name">${autoAnnotate('🐱 藍貓隊獲勝！')}</h2>`;
+        celebrationMsg = autoAnnotate('恭喜藍貓隊成為平分小偵探！');
+      } else if (GameState.p2Score > GameState.p1Score) {
+        winnerBadge = '<div class="complete-badge" style="font-size: 6rem;">🐰</div>';
+        winnerTitle = `<h2 class="p2-name">${autoAnnotate('🐰 紅兔隊獲勝！')}</h2>`;
+        celebrationMsg = autoAnnotate('恭喜紅兔隊成為平分小偵探！');
+      } else {
+        winnerBadge = '<div class="tie-badge-container"><span>🐱</span><span>🤝</span><span>🐰</span></div>';
+        winnerTitle = `<h2 class="tie-title">${autoAnnotate('🤝 烘焙雙星！平分秋色！')}</h2>`;
+        celebrationMsg = autoAnnotate('太厲害了！兩位小廚神實力相當，都是最棒的分數大師！');
+      }
       
       html = `
         <div class="single-game-layout">
           <div class="game-complete-card">
-            <div class="complete-badge" style="font-size: 6rem;">${winnerEmoji}</div>
-            <h2 class="${GameState.p1Score > GameState.p2Score ? 'p1-name':'p2-name'}">${autoAnnotate(winnerText)}</h2>
+            ${winnerBadge}
+            ${winnerTitle}
             <div style="background: #F5F5F5; width: 100%; padding: 16px; border-radius: var(--radius-sm); margin: 12px 0;">
-              <p style="font-size: 1.15rem; font-weight: 600;">貓咪隊：${GameState.p1Score} 分</p>
-              <p style="font-size: 1.15rem; font-weight: 600;">兔子隊：${GameState.p2Score} 分</p>
+              <p style="font-size: 1.15rem; font-weight: 600;">藍貓隊：${GameState.p1Score} 分</p>
+              <p style="font-size: 1.15rem; font-weight: 600;">紅兔隊：${GameState.p2Score} 分</p>
             </div>
-            <p>${autoAnnotate('恭喜成為分數烘焙小廚神！')}</p>
+            <p>${celebrationMsg}</p>
             <div style="display: flex; gap: 16px; margin-top: 16px;">
               <button class="standard-btn primary-btn" onclick="Game1Manager.start()">再對戰一次 🔄</button>
               <button class="standard-btn secondary-btn" onclick="AppManager.showScreen('screen-menu')">返回選單 🔙</button>
@@ -2059,11 +2074,25 @@ const Game2Manager = {
         this.nextQuestion();
       });
     } else {
-      // 答錯，暫時鎖定該玩家 3 秒，並給予視覺提示
+      // 答錯，浮現童趣冰凍思考覆蓋層，鎖定該玩家 3 秒
       AudioSynth.play('wrong');
+      const panel = document.getElementById(`maker-panel-${player}`);
       if (btn) {
         btn.disabled = true;
         btn.style.opacity = '0.5';
+      }
+      
+      // 建立或取得冰凍覆蓋層
+      let freezeOverlay = panel ? panel.querySelector('.freeze-overlay') : null;
+      if (!freezeOverlay && panel) {
+        freezeOverlay = document.createElement('div');
+        freezeOverlay.className = 'freeze-overlay';
+        freezeOverlay.innerHTML = `
+          <div class="freeze-icon">❄️</div>
+          <div class="freeze-title">${autoAnnotate('冰凍思考中...')}</div>
+          <div class="freeze-countdown" id="freeze-timer-${player}">3 秒後解凍</div>
+        `;
+        panel.appendChild(freezeOverlay);
       }
       
       let sec = 3;
@@ -2071,6 +2100,7 @@ const Game2Manager = {
       
       const interval = setInterval(() => {
         sec--;
+        const timerEl = document.getElementById(`freeze-timer-${player}`);
         if (sec <= 0) {
           clearInterval(interval);
           if (btn) {
@@ -2078,7 +2108,11 @@ const Game2Manager = {
             btn.style.opacity = '1';
           }
           if (lockMsg) lockMsg.innerHTML = '';
+          if (freezeOverlay && freezeOverlay.parentNode) {
+            freezeOverlay.remove();
+          }
         } else {
+          if (timerEl) timerEl.innerText = `${sec} 秒後解凍`;
           if (lockMsg) lockMsg.innerHTML = autoAnnotate(`答錯了！凍結 ${sec} 秒`);
         }
       }, 1000);
@@ -2110,19 +2144,34 @@ const Game2Manager = {
       `;
     } else {
       AudioSynth.play('victory');
-      const winnerText = GameState.p1Score > GameState.p2Score ? '🐱 藍貓隊獲勝！' : '🐰 紅兔隊獲勝！';
-      const winnerEmoji = GameState.p1Score > GameState.p2Score ? '🐱' : '🐰';
+      let winnerBadge = '';
+      let winnerTitle = '';
+      let celebrationMsg = '';
+      
+      if (GameState.p1Score > GameState.p2Score) {
+        winnerBadge = '<div class="complete-badge" style="font-size: 6rem;">🐱</div>';
+        winnerTitle = `<h2 class="p1-name">${autoAnnotate('🐱 藍貓隊獲勝！')}</h2>`;
+        celebrationMsg = autoAnnotate('恭喜藍貓隊成為頂尖分數魔法師！');
+      } else if (GameState.p2Score > GameState.p1Score) {
+        winnerBadge = '<div class="complete-badge" style="font-size: 6rem;">🐰</div>';
+        winnerTitle = `<h2 class="p2-name">${autoAnnotate('🐰 紅兔隊獲勝！')}</h2>`;
+        celebrationMsg = autoAnnotate('恭喜紅兔隊成為頂尖分數魔法師！');
+      } else {
+        winnerBadge = '<div class="tie-badge-container"><span>🐱</span><span>🤝</span><span>🐰</span></div>';
+        winnerTitle = `<h2 class="tie-title">${autoAnnotate('🤝 烘焙雙星！平分秋色！')}</h2>`;
+        celebrationMsg = autoAnnotate('太厲害了！兩位魔法廚師手藝難分高下，都是頂尖點心大師！');
+      }
       
       html = `
         <div class="single-game-layout">
           <div class="game-complete-card">
-            <div class="complete-badge" style="font-size: 6rem;">${winnerEmoji}</div>
-            <h2 class="${GameState.p1Score > GameState.p2Score ? 'p1-name':'p2-name'}">${autoAnnotate(winnerText)}</h2>
+            ${winnerBadge}
+            ${winnerTitle}
             <div style="background: #F5F5F5; width: 100%; padding: 16px; border-radius: var(--radius-sm); margin: 12px 0;">
               <p style="font-size: 1.15rem; font-weight: 600;">藍貓隊：${GameState.p1Score} 分</p>
               <p style="font-size: 1.15rem; font-weight: 600;">紅兔隊：${GameState.p2Score} 分</p>
             </div>
-            <p>${autoAnnotate('恭喜成為頂尖分數魔法師！')}</p>
+            <p>${celebrationMsg}</p>
             <div style="display: flex; gap: 16px; margin-top: 16px;">
               <button class="standard-btn primary-btn" onclick="Game2Manager.start()">再對戰一次 🔄</button>
               <button class="standard-btn secondary-btn" onclick="AppManager.showScreen('screen-menu')">返回選單 🔙</button>
@@ -2446,10 +2495,10 @@ const Game3Manager = {
       SpeechEngine.speak(speechText);
     }
 
-    // 啟動 3.0 秒讀題思考緩衝期
+    // 啟動 4.0 秒讀題思考緩衝期 (長故事題幹充裕兼顧 TTS 朗讀)
     BattleManager.startThinkingPhase({
       game: 'game3',
-      durationSec: 3.0,
+      durationSec: 4.0,
       onSetCooling: (isCooling) => {
         const b1 = document.getElementById('btn-buzz3-p1');
         const b2 = document.getElementById('btn-buzz3-p2');
@@ -2689,19 +2738,34 @@ const Game3Manager = {
       `;
     } else {
       AudioSynth.play('victory');
-      const winnerText = GameState.p1Score > GameState.p2Score ? '🐱 藍貓隊獲勝！' : '🐰 紅兔隊獲勝！';
-      const winnerEmoji = GameState.p1Score > GameState.p2Score ? '🐱' : '🐰';
+      let winnerBadge = '';
+      let winnerTitle = '';
+      let celebrationMsg = '';
+      
+      if (GameState.p1Score > GameState.p2Score) {
+        winnerBadge = '<div class="complete-badge" style="font-size: 6rem;">🐱</div>';
+        winnerTitle = `<h2 class="p1-name">${autoAnnotate('🐱 藍貓隊獲勝！')}</h2>`;
+        celebrationMsg = autoAnnotate('恭喜藍貓隊成為分數比大小大師！');
+      } else if (GameState.p2Score > GameState.p1Score) {
+        winnerBadge = '<div class="complete-badge" style="font-size: 6rem;">🐰</div>';
+        winnerTitle = `<h2 class="p2-name">${autoAnnotate('🐰 紅兔隊獲勝！')}</h2>`;
+        celebrationMsg = autoAnnotate('恭喜紅兔隊成為分數比大小大師！');
+      } else {
+        winnerBadge = '<div class="tie-badge-container"><span>🐱</span><span>🤝</span><span>🐰</span></div>';
+        winnerTitle = `<h2 class="tie-title">${autoAnnotate('🤝 烘焙雙星！平分秋色！')}</h2>`;
+        celebrationMsg = autoAnnotate('太厲害了！兩位小廚神比大小不相上下，都是最棒的分數大師！');
+      }
       
       html = `
         <div class="single-game-layout">
           <div class="game-complete-card">
-            <div class="complete-badge" style="font-size: 6rem;">${winnerEmoji}</div>
-            <h2 class="${GameState.p1Score > GameState.p2Score ? 'p1-name':'p2-name'}">${autoAnnotate(winnerText)}</h2>
+            ${winnerBadge}
+            ${winnerTitle}
             <div style="background: #F5F5F5; width: 100%; padding: 16px; border-radius: var(--radius-sm); margin: 12px 0;">
               <p style="font-size: 1.15rem; font-weight: 600;">藍貓隊：${GameState.p1Score} 分</p>
               <p style="font-size: 1.15rem; font-weight: 600;">紅兔隊：${GameState.p2Score} 分</p>
             </div>
-            <p>${autoAnnotate('恭喜成為分數比大小大師！')}</p>
+            <p>${celebrationMsg}</p>
             <div style="display: flex; gap: 16px; margin-top: 16px;">
               <button class="standard-btn primary-btn" onclick="Game3Manager.start()">再對戰一次 🔄</button>
               <button class="standard-btn secondary-btn" onclick="AppManager.showScreen('screen-menu')">返回選單 🔙</button>

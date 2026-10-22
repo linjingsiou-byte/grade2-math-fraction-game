@@ -883,15 +883,15 @@ body {
 }
 
 .pvp-buzz-btn {
-  width: 140px;
-  height: 140px;
+  width: 156px;
+  height: 156px;
   border-radius: 50%;
   border: 8px solid white;
   color: white;
-  font-size: 1.8rem;
+  font-size: 1.85rem;
   font-weight: 800;
   cursor: pointer;
-  box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+  box-shadow: 0 10px 22px rgba(0,0,0,0.18), 0 4px 0 rgba(0,0,0,0.1);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -899,6 +899,9 @@ body {
   gap: 8px;
   font-family: var(--font-family);
   transition: all 0.1s ease;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .p1 .pvp-buzz-btn {
@@ -1715,5 +1718,75 @@ body {
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   vertical-align: middle;
 }
+
+/* ==================== 關卡二答錯冰凍思考覆蓋層 ==================== */
+.freeze-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(224, 247, 250, 0.92);
+  backdrop-filter: blur(3px);
+  border-radius: var(--radius-md, 20px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 25;
+  animation: freezeIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: inset 0 0 30px rgba(77, 208, 225, 0.4);
+  border: 3px solid #80DEEA;
+}
+
+@keyframes freezeIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.freeze-icon {
+  font-size: 3.5rem;
+  animation: freezePulse 1.2s infinite alternate;
+}
+
+@keyframes freezePulse {
+  from { transform: scale(1) rotate(-3deg); }
+  to { transform: scale(1.1) rotate(3deg); }
+}
+
+.freeze-title {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #006064;
+  text-shadow: 0 1px 2px rgba(255,255,255,0.8);
+}
+
+.freeze-countdown {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #00838F;
+  background: white;
+  padding: 6px 18px;
+  border-radius: 20px;
+  box-shadow: 0 3px 8px rgba(0, 131, 143, 0.15);
+}
+
+/* ==================== 平手烘焙雙星卡片樣式 ==================== */
+.tie-badge-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  font-size: 4.8rem;
+  margin-bottom: 8px;
+}
+
+.tie-title {
+  color: #E65100;
+  font-size: 2rem;
+  font-weight: 800;
+}
+
 
 
