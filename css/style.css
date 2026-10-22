@@ -1593,3 +1593,127 @@ body {
   top: 0.25em;
 }
 
+/* ==========================================================================
+   12. 雙人對戰標準化優化樣式 (Fraction Battle Standard Optimizer)
+   ========================================================================== */
+
+/* 對戰狀態指示列 */
+.battle-status-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 10px 24px;
+  border-radius: 50px;
+  box-shadow: 0 4px 15px rgba(92, 61, 46, 0.12);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-brown-dark, #5D4037);
+  overflow: hidden;
+  margin: 0 auto 16px auto;
+  width: 95%;
+  max-width: 760px;
+  border: 2px solid rgba(224, 138, 91, 0.4);
+  transition: all 0.3s ease;
+  z-index: 10;
+}
+
+.battle-status-bar .status-icon {
+  font-size: 1.4rem;
+}
+
+.battle-status-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 5px;
+  background: #E0E0E0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.battle-status-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #ff9f43, #ee5253);
+  transition: width 0.1s linear;
+}
+
+/* 開搶狀態（金色高亮霓虹光暈） */
+.battle-status-bar.ready {
+  background: linear-gradient(135deg, #FFF9C4, #FFF59D);
+  border-color: #FBC02D;
+  box-shadow: 0 0 20px rgba(251, 192, 45, 0.6);
+  color: #795548;
+}
+
+/* 搶中答題倒數狀態 */
+.battle-status-bar.winner {
+  background: linear-gradient(135deg, #E8F5E9, #C8E6C9);
+  border-color: #4CAF50;
+  box-shadow: 0 0 20px rgba(76, 175, 80, 0.4);
+  color: #1B5E20;
+}
+
+/* 剩餘 3 秒警示狀態 */
+.battle-status-bar.warning {
+  background: linear-gradient(135deg, #FFEBEE, #FFCDD2);
+  border-color: #E53935;
+  box-shadow: 0 0 20px rgba(229, 57, 53, 0.5);
+  color: #B71C1C;
+  animation: pulseWarning 0.8s infinite alternate;
+}
+
+@keyframes pulseWarning {
+  from { transform: scale(1); }
+  to { transform: scale(1.02); }
+}
+
+/* 冷卻與鎖定樣式 */
+.pvp-player-panel.cooling,
+.pvp-buzz-btn.cooling,
+.maker-operation-area.cooling,
+.detective-choices.cooling {
+  opacity: 0.65;
+  filter: grayscale(0.4);
+  cursor: not-allowed !important;
+}
+
+.pvp-buzz-btn.cooling {
+  pointer-events: auto; /* 保留點擊以觸發偷按晃動與音效 */
+}
+
+/* 偷按防呆劇烈晃動動畫 */
+@keyframes shakeWarn {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px) rotate(-1deg); }
+  40% { transform: translateX(8px) rotate(1deg); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(6px); }
+}
+
+.shake-warn {
+  animation: shakeWarn 0.4s ease-in-out !important;
+}
+
+/* 數字鍵盤快捷徽章 */
+.key-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: #FFE082;
+  color: #6D4C41;
+  border: 1.5px solid #FFA000;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  margin-right: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  vertical-align: middle;
+}
+
+

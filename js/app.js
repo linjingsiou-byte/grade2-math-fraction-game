@@ -32,8 +32,51 @@ const AudioSynth = {
   init() {
     this.ctx = new (window.AudioContext || window.webkitAudioContext)();
   },
+  playBuzzerOpen() {
+    if (!this.enabled) return;
+    if (!this.ctx) this.init();
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    const now = this.ctx.currentTime;
+    const notes = [523.25, 659.25, 783.99]; // C5, E5, G5 大三和弦
+    notes.forEach((freq, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      const startTime = now + i * 0.08;
+      osc.frequency.setValueAtTime(freq, startTime);
+      gain.gain.setValueAtTime(0.2, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.35);
+      osc.start(startTime);
+      osc.stop(startTime + 0.35);
+    });
+  },
+  playSoftClick() {
+    if (!this.enabled) return;
+    if (!this.ctx) this.init();
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.frequency.setValueAtTime(220, now);
+    osc.frequency.exponentialRampToValueAtTime(110, now + 0.08);
+    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+    osc.start(now);
+    osc.stop(now + 0.08);
+  },
   play(type) {
     if (!this.enabled) return;
+    if (type === 'buzzerOpen') {
+      this.playBuzzerOpen();
+      return;
+    }
+    if (type === 'softClick') {
+      this.playSoftClick();
+      return;
+    }
     if (!this.ctx) this.init();
     if (this.ctx.state === 'suspended') {
       this.ctx.resume();
@@ -131,6 +174,196 @@ const SpeechEngine = {
     utterance.rate = 0.82; // 稍微放慢速度
     utterance.pitch = 1.05;
     window.speechSynthesis.speak(utterance);
+  }
+};
+
+// 3.5 雙人對戰標準化控制器 (BattleManager)
+const BattleManager = {
+  thinkingTimer: null,
+  answerTimer: null,
+  isThinkingPhase: false,
+  isAnswerPhase: false,
+  activeGame: null,
+  answeringPlayer: null,
+  hasPassedOn: false,
+
+  cleanup() {
+    this.clearThinkingTimer();
+    this.clearAnswerTimer();
+    this.isThinkingPhase = false;
+    this.isAnswerPhase = false;
+    this.activeGame = null;
+    this.answeringPlayer = null;
+    this.hasPassedOn = false;
+    if (window.pvpActiveKeyHandler) {
+      window.removeEventListener('keydown', window.pvpActiveKeyHandler);
+      window.pvpActiveKeyHandler = null;
+    }
+  },
+
+  clearThinkingTimer() {
+    if (this.thinkingTimer) {
+      clearInterval(this.thinkingTimer);
+      this.thinkingTimer = null;
+    }
+  },
+
+  clearAnswerTimer() {
+    if (this.answerTimer) {
+      clearInterval(this.answerTimer);
+      this.answerTimer = null;
+    }
+  },
+
+  triggerShake(el) {
+    if (!el) return;
+    el.classList.remove('shake-warn');
+    void el.offsetWidth;
+    el.classList.add('shake-warn');
+    AudioSynth.playSoftClick();
+    setTimeout(() => {
+      el.classList.remove('shake-warn');
+    }, 450);
+  },
+
+  startThinkingPhase(options) {
+    this.cleanup();
+    this.isThinkingPhase = true;
+    this.activeGame = options.game;
+    const durationSec = options.durationSec || 3.0;
+
+    const statusBar = document.getElementById('battle-status-bar');
+    const statusIcon = document.getElementById('battle-status-icon');
+    const statusText = document.getElementById('battle-status-text');
+    const progressFill = document.getElementById('battle-status-progress-fill');
+
+    if (statusBar) {
+      statusBar.className = 'battle-status-bar';
+    }
+    if (statusIcon) statusIcon.textContent = '⏳';
+    if (statusText) {
+      const modeHint = options.game === 'game2' ? '開放競速' : '開放搶答';
+      statusText.innerHTML = `仔細看題思考中... <strong id="battle-status-timer">${durationSec.toFixed(1)}</strong> 秒後${modeHint}！`;
+    }
+    if (progressFill) {
+      progressFill.style.transition = 'none';
+      progressFill.style.width = '0%';
+      progressFill.style.background = 'linear-gradient(90deg, #ff9f43, #ee5253)';
+    }
+
+    if (options.onSetCooling) {
+      options.onSetCooling(true);
+    }
+
+    const totalMs = durationSec * 1000;
+    const intervalMs = 100;
+    let elapsedMs = 0;
+
+    this.thinkingTimer = setInterval(() => {
+      elapsedMs += intervalMs;
+      const remainingSec = Math.max(0, (totalMs - elapsedMs) / 1000);
+      const percent = Math.min(100, (elapsedMs / totalMs) * 100);
+
+      const timerEl = document.getElementById('battle-status-timer');
+      if (timerEl) {
+        timerEl.textContent = remainingSec.toFixed(1);
+      }
+      if (progressFill) {
+        progressFill.style.transition = 'width 0.1s linear';
+        progressFill.style.width = `${percent}%`;
+      }
+
+      if (elapsedMs >= totalMs) {
+        this.clearThinkingTimer();
+        this.isThinkingPhase = false;
+        AudioSynth.playBuzzerOpen();
+
+        if (statusBar) {
+          statusBar.className = 'battle-status-bar ready';
+        }
+        if (statusIcon) statusIcon.textContent = '⚡';
+        if (statusText) {
+          if (options.game === 'game2') {
+            statusText.innerHTML = '⚡ <strong>烘焙競速開始！</strong>快動手切割點心並送出！';
+          } else {
+            statusText.innerHTML = '⚡ <strong>搶答開始！</strong>快按搶答鈕（貓咪 A鍵/空白鍵 ｜ 兔子 L鍵/Enter鍵）！';
+          }
+        }
+
+        if (options.onSetCooling) {
+          options.onSetCooling(false);
+        }
+
+        if (options.onThinkingComplete) {
+          options.onThinkingComplete();
+        }
+      }
+    }, intervalMs);
+  },
+
+  startAnswerPhase(options) {
+    this.clearAnswerTimer();
+    this.isAnswerPhase = true;
+    this.answeringPlayer = options.player;
+    this.hasPassedOn = options.isPassOn || false;
+
+    const durationSec = options.durationSec || 10;
+    const pName = options.player === 'p1' ? '🐱 藍貓隊' : '🐰 紅兔隊';
+    const turnTitle = this.hasPassedOn ? '🔄【接力作答】' : '🎉【搶答成功】';
+
+    const statusBar = document.getElementById('battle-status-bar');
+    const statusIcon = document.getElementById('battle-status-icon');
+    const statusText = document.getElementById('battle-status-text');
+    const progressFill = document.getElementById('battle-status-progress-fill');
+
+    if (statusBar) {
+      statusBar.className = 'battle-status-bar winner';
+    }
+    if (statusIcon) statusIcon.textContent = '⏱️';
+    if (statusText) {
+      const hint = options.shortcutHint ? `（${options.shortcutHint}）` : '';
+      statusText.innerHTML = `${turnTitle} <strong>${pName} 請作答！</strong> 剩餘時間：<strong id="battle-answer-timer">${durationSec.toFixed(1)}</strong> 秒 ${hint}`;
+    }
+    if (progressFill) {
+      progressFill.style.transition = 'none';
+      progressFill.style.width = '100%';
+      progressFill.style.background = 'linear-gradient(90deg, #ff9f43, #2ed573)';
+    }
+
+    const totalMs = durationSec * 1000;
+    const intervalMs = 100;
+    let remainingMs = totalMs;
+
+    this.answerTimer = setInterval(() => {
+      remainingMs -= intervalMs;
+      const remainingSec = Math.max(0, remainingMs / 1000);
+      const percent = Math.max(0, (remainingMs / totalMs) * 100);
+
+      const timerEl = document.getElementById('battle-answer-timer');
+      if (timerEl) {
+        timerEl.textContent = remainingSec.toFixed(1);
+      }
+      if (progressFill) {
+        progressFill.style.transition = 'width 0.1s linear';
+        progressFill.style.width = `${percent}%`;
+        if (remainingSec <= 3.0) {
+          progressFill.style.background = 'linear-gradient(90deg, #ee5253, #ff4757)';
+        }
+      }
+
+      if (statusBar && remainingSec <= 3.0 && remainingSec > 0) {
+        statusBar.classList.add('warning');
+      }
+
+      if (remainingMs <= 0) {
+        this.clearAnswerTimer();
+        this.isAnswerPhase = false;
+        if (statusBar) statusBar.classList.remove('warning');
+        if (options.onTimeout) {
+          options.onTimeout();
+        }
+      }
+    }, intervalMs);
   }
 };
 
@@ -452,6 +685,7 @@ const AppManager = {
     
     GameState.currentScreen = screenId;
     window.speechSynthesis.cancel(); // 切換畫面時自動靜音 TTS
+    BattleManager.cleanup(); // 清理對戰計時器與鍵盤事件
   },
   
   // Confetti 答對煙火效果
@@ -975,9 +1209,10 @@ const Game1Manager = {
   },
   
   // --------------------------------------------------
-  // 雙人對戰版題目渲染 (搶答機制)
+  // 雙人對戰版題目渲染 (搶答機制 - 標準化升級)
   // --------------------------------------------------
   renderPvpQuestion() {
+    BattleManager.cleanup();
     const container = document.getElementById('game-1-container');
     
     // 分開平分與不平分的選項
@@ -1003,6 +1238,15 @@ const Game1Manager = {
     };
     
     let html = `
+      <!-- 雙人對戰標準狀態指示列 -->
+      <div id="battle-status-bar" class="battle-status-bar">
+        <span class="status-icon" id="battle-status-icon">⏳</span>
+        <span class="status-text" id="battle-status-text">仔細看題思考中... <strong id="battle-status-timer">3.0</strong> 秒後開放搶答！</span>
+        <div class="battle-status-progress">
+          <div id="battle-status-progress-fill" class="battle-status-progress-fill"></div>
+        </div>
+      </div>
+
       <div class="pvp-split-layout">
         <!-- 玩家一 (藍貓) -->
         <div class="pvp-player-panel p1" id="pvp-panel-p1">
@@ -1011,11 +1255,11 @@ const Game1Manager = {
             <div class="player-score" id="pvp-score-p1">${GameState.p1Score} / ${GameState.pvpMaxScore} 分</div>
           </div>
           <div class="pvp-buzz-area">
-            <button class="pvp-buzz-btn" id="btn-buzz-p1">
+            <button class="pvp-buzz-btn cooling" id="btn-buzz-p1">
               <span>🐱</span>
               <span>搶答</span>
             </button>
-            <div class="pvp-action-msg" id="msg-p1">請按按鈕搶答！</div>
+            <div class="pvp-action-msg" id="msg-p1">請看題思考...</div>
           </div>
         </div>
         
@@ -1026,28 +1270,30 @@ const Game1Manager = {
             <div class="player-score" id="pvp-score-p2">${GameState.p2Score} / ${GameState.pvpMaxScore} 分</div>
           </div>
           <div class="pvp-buzz-area">
-            <button class="pvp-buzz-btn" id="btn-buzz-p2">
+            <button class="pvp-buzz-btn cooling" id="btn-buzz-p2">
               <span>🐰</span>
               <span>搶答</span>
             </button>
-            <div class="pvp-action-msg" id="msg-p2">請按按鈕搶答！</div>
+            <div class="pvp-action-msg" id="msg-p2">請看題思考...</div>
           </div>
         </div>
       </div>
       
       <!-- 中央共用題目板 -->
-      <div class="game-card-main" style="margin-top: 24px; min-height: 250px;">
+      <div class="game-card-main" style="margin-top: 20px; min-height: 250px;">
         <div class="question-text-box">
           <button class="question-speak-btn" id="btn-pvp-q1-speak">🔊</button>
           <span>${autoAnnotate(GameState.currentQuestionData.questionText)}</span>
         </div>
         
-        <!-- 選項顯示 (尚未搶答前不可點擊) -->
-        <div class="detective-choices" id="pvp-choices-grid" style="pointer-events: none; opacity: 0.6;">
+        <!-- 選項顯示 (題目 100% 完整開源展示，尚未搶答前不可點擊) -->
+        <div class="detective-choices" id="pvp-choices-grid" style="pointer-events: none; opacity: 0.85;">
           ${options.map((opt, i) => `
             <div class="detective-choice-card" data-index="${i}">
               <div class="choice-svg-wrap">${opt.draw()}</div>
-              <div class="choice-label-text">${autoAnnotate('圖形 ' + numToChinese[i+1])}</div>
+              <div class="choice-label-text">
+                <span class="key-badge">${i+1}</span>${autoAnnotate('圖形 ' + numToChinese[i+1])}
+              </div>
             </div>
           `).join('')}
         </div>
@@ -1063,100 +1309,208 @@ const Game1Manager = {
     if (GameState.autoRead) {
       SpeechEngine.speak(GameState.currentQuestionData.questionText);
     }
+
+    // 啟動 3.0 秒讀題思考緩衝期
+    BattleManager.startThinkingPhase({
+      game: 'game1',
+      durationSec: 3.0,
+      onSetCooling: (isCooling) => {
+        const b1 = document.getElementById('btn-buzz-p1');
+        const b2 = document.getElementById('btn-buzz-p2');
+        if (b1) b1.classList.toggle('cooling', isCooling);
+        if (b2) b2.classList.toggle('cooling', isCooling);
+      },
+      onThinkingComplete: () => {
+        GameState.pvpLocked = false;
+        const msg1 = document.getElementById('msg-p1');
+        const msg2 = document.getElementById('msg-p2');
+        if (msg1) msg1.innerHTML = autoAnnotate('⚡ 開放搶答！(按 A鍵 或 點擊)');
+        if (msg2) msg2.innerHTML = autoAnnotate('⚡ 開放搶答！(按 L鍵 或 點擊)');
+      }
+    });
     
     // 鍵盤按鍵搶答輔助 (P1: 空白鍵 或 A, P2: Enter 或 L)
     const keyboardHandler = (e) => {
-      if (GameState.pvpLocked) return;
       if (e.code === 'KeyA' || e.code === 'Space') {
         e.preventDefault();
-        this.buzz('p1');
+        this.attemptBuzz('p1');
       } else if (e.code === 'KeyL' || e.code === 'Enter') {
         e.preventDefault();
-        this.buzz('p2');
+        this.attemptBuzz('p2');
       }
     };
     
-    // 先移除舊的 listener 避免疊加
-    window.removeEventListener('keydown', window.pvp1KeyHandler);
-    window.pvp1KeyHandler = keyboardHandler;
-    window.addEventListener('keydown', window.pvp1KeyHandler);
+    window.removeEventListener('keydown', window.pvpActiveKeyHandler);
+    window.pvpActiveKeyHandler = keyboardHandler;
+    window.addEventListener('keydown', window.pvpActiveKeyHandler);
     
     // 點擊觸控搶答
-    document.getElementById('btn-buzz-p1').addEventListener('click', () => this.buzz('p1'));
-    document.getElementById('btn-buzz-p2').addEventListener('click', () => this.buzz('p2'));
+    document.getElementById('btn-buzz-p1').addEventListener('click', () => this.attemptBuzz('p1'));
+    document.getElementById('btn-buzz-p2').addEventListener('click', () => this.attemptBuzz('p2'));
+  },
+
+  attemptBuzz(player) {
+    if (BattleManager.isThinkingPhase) {
+      // 思考期內偷按：震動警告與阻擋
+      const btn = document.getElementById(`btn-buzz-${player}`);
+      BattleManager.triggerShake(btn || document.getElementById(`pvp-panel-${player}`));
+      return;
+    }
+    if (GameState.pvpLocked || BattleManager.isAnswerPhase) return;
+    this.buzz(player, false);
   },
   
-  buzz(player) {
-    if (GameState.pvpLocked) return;
+  buzz(player, isPassOn = false) {
     GameState.pvpLocked = true;
     GameState.pvpTurn = player;
     
     AudioSynth.play('click');
     
-    // 高亮搶答成功者的面版
     const p1Panel = document.getElementById('pvp-panel-p1');
     const p2Panel = document.getElementById('pvp-panel-p2');
     const b1 = document.getElementById('btn-buzz-p1');
     const b2 = document.getElementById('btn-buzz-p2');
     
-    b1.classList.add('disabled');
-    b2.classList.add('disabled');
+    if (b1) b1.classList.add('disabled');
+    if (b2) b2.classList.add('disabled');
     
     if (player === 'p1') {
-      p1Panel.classList.add('active-turn');
-      document.getElementById('msg-p1').innerHTML = autoAnnotate('搶答成功！請點選答案！');
-      document.getElementById('msg-p2').innerHTML = autoAnnotate('對方正在答題...');
+      if (p1Panel) p1Panel.classList.add('active-turn');
+      if (p2Panel) p2Panel.classList.remove('active-turn');
+      const m1 = document.getElementById('msg-p1');
+      const m2 = document.getElementById('msg-p2');
+      if (m1) m1.innerHTML = isPassOn ? autoAnnotate('接力作答！請點選答案！') : autoAnnotate('搶答成功！請點選答案！');
+      if (m2) m2.innerHTML = autoAnnotate('對方正在答題...');
     } else {
-      p2Panel.classList.add('active-turn');
-      document.getElementById('msg-p2').innerHTML = autoAnnotate('搶答成功！請點選答案！');
-      document.getElementById('msg-p1').innerHTML = autoAnnotate('對方正在答題...');
+      if (p2Panel) p2Panel.classList.add('active-turn');
+      if (p1Panel) p1Panel.classList.remove('active-turn');
+      const m2 = document.getElementById('msg-p2');
+      const m1 = document.getElementById('msg-p1');
+      if (m2) m2.innerHTML = isPassOn ? autoAnnotate('接力作答！請點選答案！') : autoAnnotate('搶答成功！請點選答案！');
+      if (m1) m1.innerHTML = autoAnnotate('對方正在答題...');
     }
     
     // 啟用中央選項讓搶答者點擊
     const grid = document.getElementById('pvp-choices-grid');
-    grid.style.pointerEvents = 'auto';
-    grid.style.opacity = '1';
-    
-    grid.querySelectorAll('.detective-choice-card').forEach(card => {
-      card.addEventListener('click', (e) => {
-        const idx = parseInt(e.currentTarget.getAttribute('data-index'));
-        const opt = GameState.currentQuestionData.options[idx];
-        this.submitPvpAnswer(player, opt.isEqual);
+    if (grid) {
+      grid.style.pointerEvents = 'auto';
+      grid.style.opacity = '1';
+      grid.querySelectorAll('.detective-choice-card').forEach(card => {
+        card.onclick = (e) => {
+          const idx = parseInt(e.currentTarget.getAttribute('data-index'));
+          const opt = GameState.currentQuestionData.options[idx];
+          this.submitPvpAnswer(player, opt.isEqual);
+        };
       });
+    }
+
+    // 啟動 10 秒作答限時倒數
+    BattleManager.startAnswerPhase({
+      player: player,
+      isPassOn: isPassOn,
+      durationSec: 10,
+      shortcutHint: '可用鍵盤 [1][2][3][4] 快速選答',
+      onTimeout: () => this.handlePvpTimeout(player)
     });
+
+    // 鍵盤數字快捷鍵作答監聽 [1][2][3][4]
+    const answerKeyHandler = (e) => {
+      let selectedIndex = null;
+      if (e.code === 'Digit1' || e.code === 'Numpad1') selectedIndex = 0;
+      else if (e.code === 'Digit2' || e.code === 'Numpad2') selectedIndex = 1;
+      else if (e.code === 'Digit3' || e.code === 'Numpad3') selectedIndex = 2;
+      else if (e.code === 'Digit4' || e.code === 'Numpad4') selectedIndex = 3;
+
+      if (selectedIndex !== null && GameState.currentQuestionData && GameState.currentQuestionData.options[selectedIndex]) {
+        e.preventDefault();
+        const opt = GameState.currentQuestionData.options[selectedIndex];
+        this.submitPvpAnswer(player, opt.isEqual);
+      }
+    };
+
+    window.removeEventListener('keydown', window.pvpActiveKeyHandler);
+    window.pvpActiveKeyHandler = answerKeyHandler;
+    window.addEventListener('keydown', window.pvpActiveKeyHandler);
+  },
+
+  handlePvpTimeout(player) {
+    AudioSynth.play('wrong');
+    if (!BattleManager.hasPassedOn) {
+      // 第一次超時：轉交給對手接力 10 秒作答
+      const opponent = player === 'p1' ? 'p2' : 'p1';
+      this.switchPvpTurn(opponent);
+    } else {
+      // 雙方皆超時
+      BattleManager.cleanup();
+      this.showPvpResultOverlay(null, false, true);
+    }
+  },
+
+  switchPvpTurn(newPlayer) {
+    this.buzz(newPlayer, true);
   },
   
   submitPvpAnswer(player, isCorrect) {
-    // 移除鍵盤事件
-    window.removeEventListener('keydown', window.pvp1KeyHandler);
-    
-    // 判定得分
     if (isCorrect) {
+      BattleManager.cleanup();
       AudioSynth.play('correct');
       AppManager.spawnConfetti();
       if (player === 'p1') GameState.p1Score++;
       else GameState.p2Score++;
+      this.showPvpResultOverlay(player, true, false);
     } else {
       AudioSynth.play('wrong');
-      // 答錯扣分防亂搶，但最少零分
+      // 答錯扣 1 分
       if (player === 'p1') GameState.p1Score = Math.max(0, GameState.p1Score - 1);
       else GameState.p2Score = Math.max(0, GameState.p2Score - 1);
+      
+      const s1 = document.getElementById('pvp-score-p1');
+      const s2 = document.getElementById('pvp-score-p2');
+      if (s1) s1.innerText = `${GameState.p1Score} / ${GameState.pvpMaxScore} 分`;
+      if (s2) s2.innerText = `${GameState.p2Score} / ${GameState.pvpMaxScore} 分`;
+
+      if (!BattleManager.hasPassedOn) {
+        // 第一次答錯：接力交給對手作答！
+        const opponent = player === 'p1' ? 'p2' : 'p1';
+        this.switchPvpTurn(opponent);
+      } else {
+        // 雙方皆答錯
+        BattleManager.cleanup();
+        this.showPvpResultOverlay(player, false, false);
+      }
     }
-    
-    // 顯示搶答回饋覆蓋
+  },
+
+  showPvpResultOverlay(player, isCorrect, isTimeout = false) {
+    BattleManager.cleanup();
     const mainCard = document.querySelector('.game-card-main');
+    if (!mainCard) return;
+
     const overlay = document.createElement('div');
     overlay.className = 'feedback-overlay';
     
-    const winnerName = player === 'p1' ? '🐱 藍貓隊' : '🐰 紅兔隊';
+    const playerName = player === 'p1' ? '🐱 藍貓隊' : (player === 'p2' ? '🐰 紅兔隊' : '雙方');
+    let titleStr = '';
+    let reasonStr = '';
+
+    if (isCorrect) {
+      titleStr = `${playerName} ${autoAnnotate('答對了！加 1 分')}`;
+      reasonStr = autoAnnotate('太厲害了！找對了平分的點心！');
+    } else if (isTimeout) {
+      titleStr = autoAnnotate('雙方作答皆超時！');
+      reasonStr = autoAnnotate('時間到了！下一題要更快更專注喔！');
+    } else {
+      titleStr = autoAnnotate('雙方皆未答對～');
+      reasonStr = autoAnnotate('哎呀！這幾種切法沒有平分，下一題再接再厲！');
+    }
     
     overlay.innerHTML = `
       <div class="feedback-emoji">${isCorrect ? '🎉' : '😢'}</div>
       <div class="feedback-title ${isCorrect ? 'correct' : 'wrong'}">
-        ${winnerName} ${isCorrect ? autoAnnotate('答對了！加 1 分') : autoAnnotate('答錯了！扣 1 分')}
+        ${titleStr}
       </div>
       <div class="feedback-reason">
-        ${isCorrect ? autoAnnotate('太厲害了！找對了平分的點心！') : autoAnnotate('哎呀！這不是平分的切法喔。')}
+        ${reasonStr}
       </div>
       <button class="standard-btn primary-btn" id="btn-next-pvp-q">下一題 ➡️</button>
     `;
@@ -1168,7 +1522,7 @@ const Game1Manager = {
   },
   
   showFinalScore() {
-    window.removeEventListener('keydown', window.pvp1KeyHandler);
+    BattleManager.cleanup();
     const container = document.getElementById('game-1-container');
     
     let html = '';
@@ -1400,6 +1754,11 @@ const Game2Manager = {
     
     // 點擊點心切片回呼
     const clickHandler = (idx) => {
+      if (player !== 'single' && BattleManager.isThinkingPhase) {
+        const panel = document.getElementById(player === 'p1' ? 'maker-panel-p1' : 'maker-panel-p2');
+        BattleManager.triggerShake(panel);
+        return;
+      }
       AudioSynth.play('click');
       state.highlighted = idx;
       this.renderMakerSvg(player);
@@ -1490,9 +1849,10 @@ const Game2Manager = {
   },
   
   // --------------------------------------------------
-  // 雙人對戰版題目渲染 (同屏競速切割)
+  // 雙人對戰版題目渲染 (同屏分流競速型 - 標準化升級)
   // --------------------------------------------------
   renderPvpQuestion() {
+    BattleManager.cleanup();
     const container = document.getElementById('game-2-container');
     const order = this.currentOrder;
     
@@ -1502,7 +1862,16 @@ const Game2Manager = {
     const speechQ = `請做 ${order.name} ${shapeUnit} ${order.shape === 'circle' ? '披薩' : '巧克力'}。`;
     
     let html = `
-      <!-- 頂部共用題目區 -->
+      <!-- 雙人對戰標準狀態指示列 -->
+      <div id="battle-status-bar" class="battle-status-bar">
+        <span class="status-icon" id="battle-status-icon">⏳</span>
+        <span class="status-text" id="battle-status-text">仔細看題思考中... <strong id="battle-status-timer">3.0</strong> 秒後開放競速！</span>
+        <div class="battle-status-progress">
+          <div id="battle-status-progress-fill" class="battle-status-progress-fill"></div>
+        </div>
+      </div>
+
+      <!-- 頂部共用題目區 (100% 開放清楚顯示) -->
       <div class="game-card-main" style="margin-bottom: 12px; padding: 16px 24px;">
         <div class="question-text-box" style="margin-bottom: 0;">
           <button class="question-speak-btn" id="btn-pvp-q2-speak">🔊</button>
@@ -1512,7 +1881,7 @@ const Game2Manager = {
       
       <div class="pvp-split-layout">
         <!-- P1 (藍貓) -->
-        <div class="pvp-player-panel p1" id="maker-panel-p1">
+        <div class="pvp-player-panel p1 cooling" id="maker-panel-p1">
           <div class="player-panel-header">
             <div class="player-info p1-name">🐱 藍貓隊</div>
             <div class="player-score">${GameState.p1Score} / ${GameState.pvpMaxScore} 分</div>
@@ -1543,7 +1912,7 @@ const Game2Manager = {
         </div>
         
         <!-- P2 (紅兔) -->
-        <div class="pvp-player-panel p2" id="maker-panel-p2">
+        <div class="pvp-player-panel p2 cooling" id="maker-panel-p2">
           <div class="player-panel-header">
             <div class="player-info p2-name">🐰 紅兔隊</div>
             <div class="player-score">${GameState.p2Score} / ${GameState.pvpMaxScore} 分</div>
@@ -1588,30 +1957,73 @@ const Game2Manager = {
     // 渲染兩個玩家的畫布
     this.renderMakerSvg('p1');
     this.renderMakerSvg('p2');
+
+    // 啟動 3.0 秒讀題思考緩衝期
+    BattleManager.startThinkingPhase({
+      game: 'game2',
+      durationSec: 3.0,
+      onSetCooling: (isCooling) => {
+        const p1 = document.getElementById('maker-panel-p1');
+        const p2 = document.getElementById('maker-panel-p2');
+        if (p1) p1.classList.toggle('cooling', isCooling);
+        if (p2) p2.classList.toggle('cooling', isCooling);
+      },
+      onThinkingComplete: () => {
+        // 雙方面板解鎖，競速開始
+      }
+    });
     
-    // 綁定 P1 拉桿與送出
+    // 綁定 P1 拉桿與送出 (具備思考期防偷跑檢查)
     const r1 = document.getElementById('pvp-range-p1');
     r1.oninput = (e) => {
+      if (BattleManager.isThinkingPhase) {
+        e.target.value = this.p1State.divider;
+        const panel = document.getElementById('maker-panel-p1');
+        BattleManager.triggerShake(panel);
+        return;
+      }
       this.p1State.divider = parseInt(e.target.value);
       this.p1State.highlighted = null;
       document.getElementById('pvp-bubble-p1').innerText = this.p1State.divider;
       this.renderMakerSvg('p1');
     };
     
-    // 綁定 P2 拉桿與送出
+    // 綁定 P2 拉桿與送出 (具備思考期防偷跑檢查)
     const r2 = document.getElementById('pvp-range-p2');
     r2.oninput = (e) => {
+      if (BattleManager.isThinkingPhase) {
+        e.target.value = this.p2State.divider;
+        const panel = document.getElementById('maker-panel-p2');
+        BattleManager.triggerShake(panel);
+        return;
+      }
       this.p2State.divider = parseInt(e.target.value);
       this.p2State.highlighted = null;
       document.getElementById('pvp-bubble-p2').innerText = this.p2State.divider;
       this.renderMakerSvg('p2');
     };
     
-    document.getElementById('btn-pvp-submit-p1').onclick = () => this.submitPvpMaker('p1');
-    document.getElementById('btn-pvp-submit-p2').onclick = () => this.submitPvpMaker('p2');
+    document.getElementById('btn-pvp-submit-p1').onclick = () => {
+      if (BattleManager.isThinkingPhase) {
+        const panel = document.getElementById('maker-panel-p1');
+        BattleManager.triggerShake(panel);
+        return;
+      }
+      this.submitPvpMaker('p1');
+    };
+
+    document.getElementById('btn-pvp-submit-p2').onclick = () => {
+      if (BattleManager.isThinkingPhase) {
+        const panel = document.getElementById('maker-panel-p2');
+        BattleManager.triggerShake(panel);
+        return;
+      }
+      this.submitPvpMaker('p2');
+    };
   },
   
   submitPvpMaker(player) {
+    if (BattleManager.isThinkingPhase) return;
     const order = this.currentOrder;
     const state = player === 'p1' ? this.p1State : this.p2State;
     const btn = document.getElementById(`btn-pvp-submit-${player}`);
@@ -1621,6 +2033,7 @@ const Game2Manager = {
     const isCorrect = (state.divider === order.targetDen && state.highlighted !== null);
     
     if (isCorrect) {
+      BattleManager.cleanup();
       AudioSynth.play('correct');
       AppManager.spawnConfetti();
       
@@ -1648,27 +2061,32 @@ const Game2Manager = {
     } else {
       // 答錯，暫時鎖定該玩家 3 秒，並給予視覺提示
       AudioSynth.play('wrong');
-      btn.disabled = true;
-      btn.style.opacity = '0.5';
+      if (btn) {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+      }
       
       let sec = 3;
-      lockMsg.innerHTML = autoAnnotate(`答錯了！凍結 ${sec} 秒`);
+      if (lockMsg) lockMsg.innerHTML = autoAnnotate(`答錯了！凍結 ${sec} 秒`);
       
       const interval = setInterval(() => {
         sec--;
         if (sec <= 0) {
           clearInterval(interval);
-          btn.disabled = false;
-          btn.style.opacity = '1';
-          lockMsg.innerHTML = '';
+          if (btn) {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+          }
+          if (lockMsg) lockMsg.innerHTML = '';
         } else {
-          lockMsg.innerHTML = autoAnnotate(`答錯了！凍結 ${sec} 秒`);
+          if (lockMsg) lockMsg.innerHTML = autoAnnotate(`答錯了！凍結 ${sec} 秒`);
         }
       }, 1000);
     }
   },
   
   showFinalScore() {
+    BattleManager.cleanup();
     const container = document.getElementById('game-2-container');
     let html = '';
     
@@ -1918,9 +2336,10 @@ const Game3Manager = {
   },
   
   // --------------------------------------------------
-  // 雙人對戰版題目渲染 (搶答比大小)
+  // 雙人對戰版題目渲染 (搶答比大小 - 標準化升級)
   // --------------------------------------------------
   renderPvpQuestion() {
+    BattleManager.cleanup();
     const container = document.getElementById('game-3-container');
     
     // 依序取出打亂後的題目，避免重複
@@ -1935,6 +2354,15 @@ const Game3Manager = {
     const speechText = `小熊樂樂和小貓咪咪拿了相同大小的${shapeNameStr}。小熊樂樂吃了 ${numToChinese[q.den1]}分之一 ${shapeUnitStr}，小貓咪咪吃了 ${numToChinese[q.den2]}分之一 ${shapeUnitStr}。誰吃得比較多？`;
     
     let html = `
+      <!-- 雙人對戰標準狀態指示列 -->
+      <div id="battle-status-bar" class="battle-status-bar">
+        <span class="status-icon" id="battle-status-icon">⏳</span>
+        <span class="status-text" id="battle-status-text">仔細看題思考中... <strong id="battle-status-timer">3.0</strong> 秒後開放搶答！</span>
+        <div class="battle-status-progress">
+          <div id="battle-status-progress-fill" class="battle-status-progress-fill"></div>
+        </div>
+      </div>
+
       <div class="pvp-split-layout">
         <!-- 玩家一 (藍貓) -->
         <div class="pvp-player-panel p1" id="pvp3-panel-p1">
@@ -1943,11 +2371,11 @@ const Game3Manager = {
             <div class="player-score" id="pvp3-score-p1">${GameState.p1Score} / ${GameState.pvpMaxScore} 分</div>
           </div>
           <div class="pvp-buzz-area">
-            <button class="pvp-buzz-btn" id="btn-buzz3-p1">
+            <button class="pvp-buzz-btn cooling" id="btn-buzz3-p1">
               <span>🐱</span>
               <span>搶答</span>
             </button>
-            <div class="pvp-action-msg" id="msg3-p1">搶答後回答！</div>
+            <div class="pvp-action-msg" id="msg3-p1">請看題思考...</div>
           </div>
         </div>
         
@@ -1958,17 +2386,17 @@ const Game3Manager = {
             <div class="player-score" id="pvp3-score-p2">${GameState.p2Score} / ${GameState.pvpMaxScore} 分</div>
           </div>
           <div class="pvp-buzz-area">
-            <button class="pvp-buzz-btn" id="btn-buzz3-p2">
+            <button class="pvp-buzz-btn cooling" id="btn-buzz3-p2">
               <span>🐰</span>
               <span>搶答</span>
             </button>
-            <div class="pvp-action-msg" id="msg3-p2">搶答後回答！</div>
+            <div class="pvp-action-msg" id="msg3-p2">請看題思考...</div>
           </div>
         </div>
       </div>
       
-      <!-- 中央比對板 -->
-      <div class="game-card-main" style="margin-top: 24px; min-height: 280px;">
+      <!-- 中央比對板 (100% 完整開源展示) -->
+      <div class="game-card-main" style="margin-top: 20px; min-height: 280px;">
         <div class="question-text-box" style="flex-direction: column; gap: 4px; margin-bottom: 16px;">
           <div style="display:flex; align-items:center; gap:8px;">
             <button class="question-speak-btn" id="btn-pvp-q3-speak">🔊</button>
@@ -1980,11 +2408,11 @@ const Game3Manager = {
         </div>
         
         <!-- 左右卡片選項 (搶答前不可點擊) -->
-        <div class="comparison-options" id="pvp3-choices" style="pointer-events: none; opacity: 0.6; width:100%;">
+        <div class="comparison-options" id="pvp3-choices" style="pointer-events: none; opacity: 0.85; width:100%;">
           <!-- 小熊樂樂 (1/den1) -->
           <div class="comparison-option-card" id="pvp3-opt-bear" data-target="bear" style="flex:1;">
             <span class="option-character">🐻</span>
-            <span class="choice-label-text">小熊樂樂</span>
+            <span class="choice-label-text"><span class="key-badge">1</span>小熊樂樂</span>
             <div class="option-svg-wrap" style="width:90px; height:90px;">
               ${q.shape === 'circle' ? SVGRenderer.drawCircleFraction(q.den1, 0) : SVGRenderer.drawRectFraction(q.den1, 0)}
             </div>
@@ -1996,7 +2424,7 @@ const Game3Manager = {
           <!-- 小貓咪咪 (1/den2) -->
           <div class="comparison-option-card" id="pvp3-opt-cat" data-target="cat" style="flex:1;">
             <span class="option-character">🐱</span>
-            <span class="choice-label-text">小貓咪咪</span>
+            <span class="choice-label-text"><span class="key-badge">2</span>小貓咪咪</span>
             <div class="option-svg-wrap" style="width:90px; height:90px;">
               ${q.shape === 'circle' ? SVGRenderer.drawCircleFraction(q.den2, 0) : SVGRenderer.drawRectFraction(q.den2, 0)}
             </div>
@@ -2017,29 +2445,56 @@ const Game3Manager = {
     if (GameState.autoRead) {
       SpeechEngine.speak(speechText);
     }
+
+    // 啟動 3.0 秒讀題思考緩衝期
+    BattleManager.startThinkingPhase({
+      game: 'game3',
+      durationSec: 3.0,
+      onSetCooling: (isCooling) => {
+        const b1 = document.getElementById('btn-buzz3-p1');
+        const b2 = document.getElementById('btn-buzz3-p2');
+        if (b1) b1.classList.toggle('cooling', isCooling);
+        if (b2) b2.classList.toggle('cooling', isCooling);
+      },
+      onThinkingComplete: () => {
+        GameState.pvpLocked = false;
+        const msg1 = document.getElementById('msg3-p1');
+        const msg2 = document.getElementById('msg3-p2');
+        if (msg1) msg1.innerHTML = autoAnnotate('⚡ 開放搶答！(按 A鍵 或 點擊)');
+        if (msg2) msg2.innerHTML = autoAnnotate('⚡ 開放搶答！(按 L鍵 或 點擊)');
+      }
+    });
     
     // 鍵盤輔助搶答
     const keyboardHandler = (e) => {
-      if (GameState.pvpLocked) return;
       if (e.code === 'KeyA' || e.code === 'Space') {
         e.preventDefault();
-        this.buzz('p1');
+        this.attemptBuzz('p1');
       } else if (e.code === 'KeyL' || e.code === 'Enter') {
         e.preventDefault();
-        this.buzz('p2');
+        this.attemptBuzz('p2');
       }
     };
     
-    window.removeEventListener('keydown', window.pvp3KeyHandler);
-    window.pvp3KeyHandler = keyboardHandler;
-    window.addEventListener('keydown', window.pvp3KeyHandler);
+    window.removeEventListener('keydown', window.pvpActiveKeyHandler);
+    window.pvpActiveKeyHandler = keyboardHandler;
+    window.addEventListener('keydown', window.pvpActiveKeyHandler);
     
-    document.getElementById('btn-buzz3-p1').onclick = () => this.buzz('p1');
-    document.getElementById('btn-buzz3-p2').onclick = () => this.buzz('p2');
+    document.getElementById('btn-buzz3-p1').onclick = () => this.attemptBuzz('p1');
+    document.getElementById('btn-buzz3-p2').onclick = () => this.attemptBuzz('p2');
+  },
+
+  attemptBuzz(player) {
+    if (BattleManager.isThinkingPhase) {
+      const btn = document.getElementById(`btn-buzz3-${player}`);
+      BattleManager.triggerShake(btn || document.getElementById(`pvp3-panel-${player}`));
+      return;
+    }
+    if (GameState.pvpLocked || BattleManager.isAnswerPhase) return;
+    this.buzz(player, false);
   },
   
-  buzz(player) {
-    if (GameState.pvpLocked) return;
+  buzz(player, isPassOn = false) {
     GameState.pvpLocked = true;
     GameState.pvpTurn = player;
     
@@ -2050,66 +2505,154 @@ const Game3Manager = {
     const b1 = document.getElementById('btn-buzz3-p1');
     const b2 = document.getElementById('btn-buzz3-p2');
     
-    b1.classList.add('disabled');
-    b2.classList.add('disabled');
+    if (b1) b1.classList.add('disabled');
+    if (b2) b2.classList.add('disabled');
     
     if (player === 'p1') {
-      p1Panel.classList.add('active-turn');
-      document.getElementById('msg3-p1').innerHTML = autoAnnotate('請點選答案！');
+      if (p1Panel) p1Panel.classList.add('active-turn');
+      if (p2Panel) p2Panel.classList.remove('active-turn');
+      const m1 = document.getElementById('msg3-p1');
+      const m2 = document.getElementById('msg3-p2');
+      if (m1) m1.innerHTML = isPassOn ? autoAnnotate('接力作答！請點選答案！') : autoAnnotate('搶答成功！請點選答案！');
+      if (m2) m2.innerHTML = autoAnnotate('對方正在答題...');
     } else {
-      p2Panel.classList.add('active-turn');
-      document.getElementById('msg3-p2').innerHTML = autoAnnotate('請點選答案！');
+      if (p2Panel) p2Panel.classList.add('active-turn');
+      if (p1Panel) p1Panel.classList.remove('active-turn');
+      const m2 = document.getElementById('msg3-p2');
+      const m1 = document.getElementById('msg3-p1');
+      if (m2) m2.innerHTML = isPassOn ? autoAnnotate('接力作答！請點選答案！') : autoAnnotate('搶答成功！請點選答案！');
+      if (m1) m1.innerHTML = autoAnnotate('對方正在答題...');
     }
     
     // 啟用卡片點擊
     const choices = document.getElementById('pvp3-choices');
-    choices.style.pointerEvents = 'auto';
-    choices.style.opacity = '1';
+    if (choices) {
+      choices.style.pointerEvents = 'auto';
+      choices.style.opacity = '1';
+    }
     
-    // 加亮搶答狀態
-    document.getElementById('pvp3-opt-bear').classList.add(player === 'p1' ? 'p1-hover' : 'p2-hover');
-    document.getElementById('pvp3-opt-cat').classList.add(player === 'p1' ? 'p1-hover' : 'p2-hover');
-    
-    document.getElementById('pvp3-opt-bear').onclick = () => this.submitPvpAnswer(player, 'bear');
-    document.getElementById('pvp3-opt-cat').onclick = () => this.submitPvpAnswer(player, 'cat');
+    const bearCard = document.getElementById('pvp3-opt-bear');
+    const catCard = document.getElementById('pvp3-opt-cat');
+    if (bearCard) {
+      bearCard.classList.remove('p1-hover', 'p2-hover');
+      bearCard.classList.add(player === 'p1' ? 'p1-hover' : 'p2-hover');
+      bearCard.onclick = () => this.submitPvpAnswer(player, 'bear');
+    }
+    if (catCard) {
+      catCard.classList.remove('p1-hover', 'p2-hover');
+      catCard.classList.add(player === 'p1' ? 'p1-hover' : 'p2-hover');
+      catCard.onclick = () => this.submitPvpAnswer(player, 'cat');
+    }
+
+    // 啟動 10 秒作答倒數
+    BattleManager.startAnswerPhase({
+      player: player,
+      isPassOn: isPassOn,
+      durationSec: 10,
+      shortcutHint: '可用鍵盤 [1][2] 或 [←][→] 選答',
+      onTimeout: () => this.handlePvpTimeout(player)
+    });
+
+    // 鍵盤數字快捷鍵 [1] / [2] 或 [ArrowLeft] / [ArrowRight]
+    const answerKeyHandler = (e) => {
+      if (e.code === 'Digit1' || e.code === 'Numpad1' || e.code === 'ArrowLeft') {
+        e.preventDefault();
+        this.submitPvpAnswer(player, 'bear');
+      } else if (e.code === 'Digit2' || e.code === 'Numpad2' || e.code === 'ArrowRight') {
+        e.preventDefault();
+        this.submitPvpAnswer(player, 'cat');
+      }
+    };
+
+    window.removeEventListener('keydown', window.pvpActiveKeyHandler);
+    window.pvpActiveKeyHandler = answerKeyHandler;
+    window.addEventListener('keydown', window.pvpActiveKeyHandler);
+  },
+
+  handlePvpTimeout(player) {
+    AudioSynth.play('wrong');
+    if (!BattleManager.hasPassedOn) {
+      const opponent = player === 'p1' ? 'p2' : 'p1';
+      this.switchPvpTurn(opponent);
+    } else {
+      BattleManager.cleanup();
+      this.showPvpResultOverlay(null, false, true);
+    }
+  },
+
+  switchPvpTurn(newPlayer) {
+    this.buzz(newPlayer, true);
   },
   
   submitPvpAnswer(player, choice) {
-    window.removeEventListener('keydown', window.pvp3KeyHandler);
     const q = GameState.currentQuestionData;
-    
     const correctAns = q.den1 < q.den2 ? 'bear' : 'cat';
     const isCorrect = (choice === correctAns);
     
     if (isCorrect) {
+      BattleManager.cleanup();
       AudioSynth.play('correct');
       AppManager.spawnConfetti();
       if (player === 'p1') GameState.p1Score++;
       else GameState.p2Score++;
+      this.showPvpResultOverlay(player, true, false, correctAns);
     } else {
       AudioSynth.play('wrong');
       if (player === 'p1') GameState.p1Score = Math.max(0, GameState.p1Score - 1);
       else GameState.p2Score = Math.max(0, GameState.p2Score - 1);
+
+      const s1 = document.getElementById('pvp3-score-p1');
+      const s2 = document.getElementById('pvp3-score-p2');
+      if (s1) s1.innerText = `${GameState.p1Score} / ${GameState.pvpMaxScore} 分`;
+      if (s2) s2.innerText = `${GameState.p2Score} / ${GameState.pvpMaxScore} 分`;
+
+      if (!BattleManager.hasPassedOn) {
+        const opponent = player === 'p1' ? 'p2' : 'p1';
+        this.switchPvpTurn(opponent);
+      } else {
+        BattleManager.cleanup();
+        this.showPvpResultOverlay(player, false, false, correctAns);
+      }
     }
-    
+  },
+
+  showPvpResultOverlay(player, isCorrect, isTimeout = false, correctAns = null) {
+    BattleManager.cleanup();
+    const q = GameState.currentQuestionData;
+    const resolvedCorrectAns = correctAns || (q.den1 < q.den2 ? 'bear' : 'cat');
     const mainCard = document.querySelector('.game-card-main');
+    if (!mainCard) return;
+
     const overlay = document.createElement('div');
     overlay.className = 'feedback-overlay';
     
-    const winnerName = player === 'p1' ? '🐱 藍貓隊' : '🐰 紅兔隊';
-    const correctCharStr = correctAns === 'bear' ? '小熊樂樂' : '小貓咪咪';
-    const bigDen = correctAns === 'bear' ? q.den1 : q.den2;
-    const smallDen = correctAns === 'bear' ? q.den2 : q.den1;
-    
+    const playerName = player === 'p1' ? '🐱 藍貓隊' : (player === 'p2' ? '🐰 紅兔隊' : '雙方');
+    const correctCharStr = resolvedCorrectAns === 'bear' ? '小熊樂樂' : '小貓咪咪';
+    const bigDen = resolvedCorrectAns === 'bear' ? q.den1 : q.den2;
+    const smallDen = resolvedCorrectAns === 'bear' ? q.den2 : q.den1;
     const shapeUnitStr = q.shape === 'circle' ? '個' : '條';
+
+    let titleStr = '';
+    let reasonStr = '';
+
+    if (isCorrect) {
+      titleStr = `${playerName} ${autoAnnotate('答對了！加 1 分')}`;
+      reasonStr = `${autoAnnotate('因為')} ${getFractionHTML(1, bigDen)} <span class="unit-ge">${shapeUnitStr}</span> ${autoAnnotate('大於')} ${getFractionHTML(1, smallDen)} <span class="unit-ge">${shapeUnitStr}</span>，${autoAnnotate(`所以是 ${correctCharStr} 吃得比較多喔！`)}`;
+    } else if (isTimeout) {
+      titleStr = autoAnnotate('雙方作答皆超時！');
+      reasonStr = `${autoAnnotate(`正確答案是 ${correctCharStr}。因為`)} ${getFractionHTML(1, bigDen)} <span class="unit-ge">${shapeUnitStr}</span> ${autoAnnotate('大於')} ${getFractionHTML(1, smallDen)} <span class="unit-ge">${shapeUnitStr}</span>。`;
+    } else {
+      titleStr = autoAnnotate('雙方皆未答對～');
+      reasonStr = `${autoAnnotate(`正確答案是 ${correctCharStr}。因為平分越少份（分母越小），每一份越大：`)} ${getFractionHTML(1, bigDen)} > ${getFractionHTML(1, smallDen)}。`;
+    }
     
     overlay.innerHTML = `
       <div class="feedback-emoji">${isCorrect ? '🎉' : '😢'}</div>
       <div class="feedback-title ${isCorrect ? 'correct' : 'wrong'}">
-        ${winnerName} ${isCorrect ? autoAnnotate('答對了！加 1 分') : autoAnnotate('答錯了！扣 1 分')}
+        ${titleStr}
       </div>
       <div class="feedback-reason">
-        ${autoAnnotate('因為')} ${getFractionHTML(1, bigDen)} <span class="unit-ge">${shapeUnitStr}</span> ${autoAnnotate('大於')} ${getFractionHTML(1, smallDen)} <span class="unit-ge">${shapeUnitStr}</span>，${autoAnnotate(`所以是 ${correctCharStr} 吃得比較多喔！`)}
+        ${reasonStr}
       </div>
       <button class="standard-btn primary-btn" id="btn-next-pvp-q3">下一題 ➡️</button>
     `;
@@ -2121,6 +2664,7 @@ const Game3Manager = {
   },
   
   showFinalScore() {
+    BattleManager.cleanup();
     window.removeEventListener('keydown', window.pvp3KeyHandler);
     const container = document.getElementById('game-3-container');
     let html = '';
