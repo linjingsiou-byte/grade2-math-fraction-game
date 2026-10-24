@@ -244,6 +244,7 @@ body {
 
 .bg-pink { background-color: #FFEBEE; color: var(--color-accent-pink); }
 .bg-blue { background-color: #E0F7FA; color: var(--color-accent-blue); }
+.bg-purple { background-color: #F3E5F5; color: #7B1FA2; }
 
 .mode-card h3 {
   font-size: 1.5rem;
@@ -286,6 +287,104 @@ body {
 .blue-btn:hover {
   background-color: var(--color-accent-blue-hover);
   transform: scale(1.05);
+}
+
+.purple-btn {
+  background-color: #9C27B0;
+  color: white;
+}
+.purple-btn:hover {
+  background-color: #7B1FA2;
+  transform: scale(1.05);
+}
+
+/* AI 難度選擇盒 */
+.ai-difficulty-box {
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px solid #BA68C8;
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.ai-difficulty-box.hide {
+  display: none;
+}
+
+.ai-difficulty-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.ai-bot-avatar {
+  font-size: 2.2rem;
+  background: #F3E5F5;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-bot-info h4 {
+  font-size: 1.25rem;
+  color: #4A148C;
+  margin-bottom: 2px;
+}
+
+.ai-bot-info p {
+  font-size: 0.95rem;
+  color: var(--color-text-muted);
+}
+
+.ai-difficulty-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.diff-btn {
+  background: #FAF5FB;
+  border: 2px solid #E1BEE7;
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+}
+
+.diff-btn:hover {
+  border-color: #AB47BC;
+  background: #F3E5F5;
+}
+
+.diff-btn.active {
+  background: #E1BEE7;
+  border-color: #8E24AA;
+  box-shadow: 0 4px 10px rgba(142, 36, 170, 0.25);
+  transform: translateY(-2px);
+}
+
+.diff-stars {
+  font-size: 1.15rem;
+}
+
+.diff-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #4A148C;
+}
+
+.diff-desc {
+  font-size: 0.85rem;
+  color: #6A1B9A;
 }
 
 /* 7. 遊戲選單畫面 */
@@ -1786,6 +1885,99 @@ body {
   color: #E65100;
   font-size: 2rem;
   font-weight: 800;
+}
+
+/* ==================== AI 森林外送搶單賽專屬樣式 ==================== */
+.ai-rush-header {
+  background: linear-gradient(135deg, #F3E5F5, #EDE7F6);
+  border: 2px solid #CE93D8;
+  border-radius: var(--radius-md);
+  padding: 14px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: var(--shadow-sm);
+}
+
+.ai-rush-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ai-rush-player-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #37474F;
+}
+
+.ai-rush-score-pill {
+  background: white;
+  padding: 4px 12px;
+  border-radius: 16px;
+  border: 1.5px solid #BA68C8;
+  color: #6A1B9A;
+}
+
+.ai-progress-track {
+  width: 100%;
+  height: 22px;
+  background: #E0E0E0;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.ai-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #BA68C8, #AB47BC, #E91E63);
+  border-radius: 12px;
+  transition: width 0.1s linear;
+}
+
+.ai-progress-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #37474F;
+  text-shadow: 0 0 4px white;
+  pointer-events: none;
+}
+
+.ai-customer-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #FFF9C4;
+  border: 1.5px solid #FBC02D;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #F57F17;
+}
+
+.ai-snatched-banner {
+  background: #FFEBEE;
+  border: 2px solid #EF5350;
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  color: #C62828;
+  font-weight: 700;
+  text-align: center;
+  animation: shakeWarn 0.4s ease-in-out;
+  margin-top: 10px;
 }
 
 

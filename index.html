@@ -60,6 +60,14 @@
             <button class="play-btn pink-btn">開始探索</button>
           </div>
 
+          <!-- AI Challenge Card -->
+          <div class="mode-card" id="card-mode-ai">
+            <div class="mode-card-icon bg-purple">🤖</div>
+            <h3>單人 AI 挑戰賽</h3>
+            <p>森林外送搶單賽！和「機械發條貓」比拼切點心速度！</p>
+            <button class="play-btn purple-btn">挑戰發條貓</button>
+          </div>
+
           <!-- Two Player Card -->
           <div class="mode-card" id="card-mode-pvp">
             <div class="mode-card-icon bg-blue">⚔️</div>
@@ -76,6 +84,34 @@
       <div class="menu-header">
         <h2 id="menu-title-text">遊戲選單</h2>
         <span class="badge" id="player-mode-badge">單人模式</span>
+      </div>
+
+      <!-- AI 挑戰難度選擇器 (僅在 AI 模式下顯示) -->
+      <div id="ai-difficulty-selector" class="ai-difficulty-box hide">
+        <div class="ai-difficulty-header">
+          <span class="ai-bot-avatar">🤖</span>
+          <div class="ai-bot-info">
+            <h4>對手：機械發條貓</h4>
+            <p>請選擇發條貓的運轉難度：</p>
+          </div>
+        </div>
+        <div class="ai-difficulty-options">
+          <button class="diff-btn active" data-diff="apprentice">
+            <span class="diff-stars">⭐</span>
+            <span class="diff-title">見習學徒</span>
+            <span class="diff-desc">思考 12 秒・適合練習</span>
+          </button>
+          <button class="diff-btn" data-diff="master">
+            <span class="diff-stars">⭐⭐</span>
+            <span class="diff-title">熟練師傅</span>
+            <span class="diff-desc">思考 8 秒・課堂標準</span>
+          </button>
+          <button class="diff-btn" data-diff="legend">
+            <span class="diff-stars">⭐⭐⭐</span>
+            <span class="diff-title">傳奇主廚</span>
+            <span class="diff-desc">思考 5 秒・極限手速</span>
+          </button>
+        </div>
       </div>
       
       <div class="menu-grid">

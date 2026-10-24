@@ -367,10 +367,112 @@ const BattleManager = {
   }
 };
 
+// 3.6 單人 AI 挑戰賽：森林外送搶單賽控制器 (AiRushManager)
+const AiRushManager = {
+  aiTimer: null,
+  isAiActive: false,
+  isPaused: false,
+  totalSec: 10,
+  elapsedMs: 0,
+  activeGame: null,
+  onAiSnatched: null,
+
+  getDifficultyConfig() {
+    const diff = GameState.aiDifficulty || 'apprentice';
+    if (diff === 'legend') {
+      return { totalSec: 5.5, accuracy: 1.0, title: '傳奇主廚' };
+    } else if (diff === 'master') {
+      return { totalSec: 8.5, accuracy: 0.9, title: '熟練師傅' };
+    } else {
+      // 見習學徒：預設 12 秒，若落後則放慢至 15 秒
+      let sec = 12.0;
+      if (GameState.aiScore - GameState.playerAiScore >= 2) {
+        sec = 15.0; // 動態放水防挫折
+      }
+      return { totalSec: sec, accuracy: 0.75, title: '見習學徒' };
+    }
+  },
+
+  cleanup() {
+    if (this.aiTimer) {
+      clearInterval(this.aiTimer);
+      this.aiTimer = null;
+    }
+    this.isAiActive = false;
+    this.isPaused = false;
+    this.elapsedMs = 0;
+    this.activeGame = null;
+    this.onAiSnatched = null;
+  },
+
+  pause() {
+    this.isPaused = true;
+  },
+
+  resume() {
+    this.isPaused = false;
+  },
+
+  startRound(options) {
+    this.cleanup();
+    this.activeGame = options.game;
+    this.onAiSnatched = options.onAiSnatched;
+    this.isAiActive = true;
+    this.isPaused = false;
+
+    const config = this.getDifficultyConfig();
+    this.totalSec = config.totalSec;
+    const totalMs = this.totalSec * 1000;
+    const intervalMs = 100;
+    this.elapsedMs = 0;
+
+    const fillEl = document.getElementById('ai-rush-fill');
+    const labelEl = document.getElementById('ai-rush-timer-label');
+    if (fillEl) {
+      fillEl.style.transition = 'none';
+      fillEl.style.width = '0%';
+    }
+    if (labelEl) {
+      labelEl.innerText = `🤖 發條貓備餐中... 剩餘 ${this.totalSec.toFixed(1)} 秒`;
+    }
+
+    this.aiTimer = setInterval(() => {
+      if (this.isPaused) return;
+
+      this.elapsedMs += intervalMs;
+      const percent = Math.min(100, (this.elapsedMs / totalMs) * 100);
+      const remainingSec = Math.max(0, (totalMs - this.elapsedMs) / 1000);
+
+      const fill = document.getElementById('ai-rush-fill');
+      const label = document.getElementById('ai-rush-timer-label');
+      if (fill) {
+        fill.style.transition = 'width 0.1s linear';
+        fill.style.width = `${percent}%`;
+      }
+      if (label) {
+        label.innerText = `🤖 發條貓備餐中... 剩餘 ${remainingSec.toFixed(1)} 秒`;
+      }
+
+      if (this.elapsedMs >= totalMs) {
+        clearInterval(this.aiTimer);
+        this.aiTimer = null;
+        this.isAiActive = false;
+
+        // 判定 AI 是否成功搶單
+        const willSucceed = Math.random() < config.accuracy;
+        if (this.onAiSnatched) {
+          this.onAiSnatched(willSucceed);
+        }
+      }
+    }, intervalMs);
+  }
+};
+
 // 4. 全域遊戲狀態
 const GameState = {
   currentScreen: 'screen-welcome',
-  gameMode: 'single', // 'single' 或 'pvp'
+  gameMode: 'single', // 'single', 'pvp', 或 'ai'
+  aiDifficulty: 'apprentice', // 'apprentice' (12s, 75%), 'master' (8s, 90%), 'legend' (5s, 100%)
   selectedGame: null, // 'explorer', 'game1', 'game2', 'game3'
   autoRead: true,
   
@@ -386,6 +488,11 @@ const GameState = {
   pvpQuestionIndex: 0,
   pvpTurn: null, // 用於搶答鎖定，如 'p1' 或 'p2'
   pvpLocked: false, // 是否答題中凍結
+  
+  // 單人 AI 挑戰狀態
+  aiScore: 0,
+  playerAiScore: 0,
+  aiMaxScore: 5,
   
   // 核心資料快取 (如當前題目資訊)
   currentQuestionData: null
@@ -607,12 +714,22 @@ const AppManager = {
       }
     });
     
-    // 選擇單人/對戰模式
+    // 選擇模式
     document.getElementById('card-mode-single').addEventListener('click', () => {
       AudioSynth.play('click');
       GameState.gameMode = 'single';
       document.getElementById('player-mode-badge').innerText = "單人自主學習";
       document.getElementById('player-mode-badge').className = "badge bg-pink";
+      document.getElementById('ai-difficulty-selector').classList.add('hide');
+      this.showScreen('screen-menu');
+    });
+
+    document.getElementById('card-mode-ai').addEventListener('click', () => {
+      AudioSynth.play('click');
+      GameState.gameMode = 'ai';
+      document.getElementById('player-mode-badge').innerText = "單人 AI 挑戰賽";
+      document.getElementById('player-mode-badge').className = "badge bg-purple";
+      document.getElementById('ai-difficulty-selector').classList.remove('hide');
       this.showScreen('screen-menu');
     });
     
@@ -621,7 +738,19 @@ const AppManager = {
       GameState.gameMode = 'pvp';
       document.getElementById('player-mode-badge').innerText = "雙人烘焙對決";
       document.getElementById('player-mode-badge').className = "badge bg-blue";
+      document.getElementById('ai-difficulty-selector').classList.add('hide');
       this.showScreen('screen-menu');
+    });
+
+    // AI 難度按鈕切換
+    document.querySelectorAll('.diff-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        AudioSynth.play('click');
+        document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+        const targetBtn = e.currentTarget;
+        targetBtn.classList.add('active');
+        GameState.aiDifficulty = targetBtn.getAttribute('data-diff') || 'apprentice';
+      });
     });
     
     document.getElementById('btn-back-to-welcome').addEventListener('click', () => {
@@ -686,6 +815,7 @@ const AppManager = {
     GameState.currentScreen = screenId;
     window.speechSynthesis.cancel(); // 切換畫面時自動靜音 TTS
     BattleManager.cleanup(); // 清理對戰計時器與鍵盤事件
+    AiRushManager.cleanup(); // 清理 AI 搶單計時器
   },
   
   // Confetti 答對煙火效果
@@ -1063,6 +1193,8 @@ const Game1Manager = {
     GameState.singleScore = 0;
     GameState.p1Score = 0;
     GameState.p2Score = 0;
+    GameState.aiScore = 0;
+    GameState.playerAiScore = 0;
     GameState.singleQuestionIndex = 0;
     GameState.pvpLocked = false;
     GameState.pvpTurn = null;
@@ -1073,6 +1205,7 @@ const Game1Manager = {
   
   nextQuestion() {
     window.speechSynthesis.cancel();
+    AiRushManager.cleanup();
     
     if (GameState.gameMode === 'single') {
       if (GameState.singleQuestionIndex >= GameState.maxQuestions) {
@@ -1080,6 +1213,12 @@ const Game1Manager = {
         return;
       }
       this.renderSingleQuestion();
+    } else if (GameState.gameMode === 'ai') {
+      if (GameState.playerAiScore >= GameState.aiMaxScore || GameState.aiScore >= GameState.aiMaxScore || GameState.singleQuestionIndex >= 7) {
+        this.showFinalScore();
+        return;
+      }
+      this.renderAiQuestion();
     } else {
       if (GameState.p1Score >= GameState.pvpMaxScore || GameState.p2Score >= GameState.pvpMaxScore) {
         this.showFinalScore();
@@ -1089,6 +1228,185 @@ const Game1Manager = {
       GameState.pvpLocked = false;
       GameState.pvpTurn = null;
       this.renderPvpQuestion();
+    }
+  },
+
+  // --------------------------------------------------
+  // AI 挑戰版題目渲染 (森林外送搶單賽)
+  // --------------------------------------------------
+  renderAiQuestion() {
+    const container = document.getElementById('game-1-container');
+    const equalShapes = this.shapeTemplates.filter(opt => opt.isEqual);
+    const unequalShapes = this.shapeTemplates.filter(opt => !opt.isEqual);
+    
+    const shuffledEqual = shuffleArray(equalShapes);
+    const correctOpt = shuffledEqual[0];
+    const shuffledUnequal = shuffleArray(unequalShapes);
+    const wrongOpts = shuffledUnequal.slice(0, 3);
+    
+    let options = [correctOpt, ...wrongOpts];
+    options = shuffleArray(options);
+    
+    const customers = ["🐿️ 松鼠寶寶", "🦔 刺蝟小弟", "🦊 狐狸先生", "🦌 小鹿斑比", "🦝 浣熊廚師"];
+    const currentCustomer = customers[GameState.singleQuestionIndex % customers.length];
+    const questionText = `${currentCustomer} 點餐：「我想吃平分成一樣大的點心！」哪一個圖形有平分？`;
+    const speechText = `${currentCustomer} 想吃有平分的點心，哪一個圖形有平分？`;
+
+    const diffConfig = AiRushManager.getDifficultyConfig();
+
+    let html = `
+      <div class="single-game-layout">
+        <div class="game-card-main">
+          <!-- AI 森林搶單頂部狀態列 -->
+          <div class="ai-rush-header">
+            <div class="ai-rush-info-row">
+              <div class="ai-rush-player-info">
+                <span>🧑‍🍳 小小烘焙師</span>
+                <span class="ai-rush-score-pill">⭐ ${GameState.playerAiScore} 份</span>
+              </div>
+              <div class="ai-customer-badge">
+                <span>${currentCustomer} 的訂單</span>
+              </div>
+              <div class="ai-rush-player-info">
+                <span>🤖 發條貓 (${diffConfig.title})</span>
+                <span class="ai-rush-score-pill">📦 ${GameState.aiScore} 份</span>
+              </div>
+            </div>
+            <!-- 發條貓備餐進度條 -->
+            <div class="ai-progress-track">
+              <div id="ai-rush-fill" class="ai-progress-fill"></div>
+              <div id="ai-rush-timer-label" class="ai-progress-label">🤖 發條貓備餐中...</div>
+            </div>
+          </div>
+          
+          <!-- 題目 -->
+          <div class="question-text-box">
+            <button class="question-speak-btn" id="btn-q1-speak">🔊</button>
+            <span class="q-text-span">${autoAnnotate(questionText)}</span>
+          </div>
+          
+          <!-- 選項網格 -->
+          <div class="detective-choices" id="ai-choices-grid">
+            ${options.map((opt, i) => `
+              <div class="detective-choice-card" data-equal="${opt.isEqual}" data-title="${opt.title}">
+                <div class="choice-svg-wrap">${opt.draw()}</div>
+                <div class="choice-label-text">${autoAnnotate('圖形 ' + numToChinese[i+1])}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+    
+    container.innerHTML = html;
+    
+    // 朗讀綁定
+    document.getElementById('btn-q1-speak').addEventListener('click', () => {
+      SpeechEngine.speak(speechText);
+    });
+    if (GameState.autoRead) {
+      SpeechEngine.speak(speechText);
+    }
+    
+    // 啟動發條貓倒數
+    AiRushManager.startRound({
+      game: 'game1',
+      onAiSnatched: (success) => {
+        this.handleAiSnatched(success, currentCustomer, correctOpt);
+      }
+    });
+
+    // 玩家點擊選項
+    container.querySelectorAll('.detective-choice-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        if (!AiRushManager.isAiActive) return;
+        const isEqual = e.currentTarget.getAttribute('data-equal') === 'true';
+        const titleStr = e.currentTarget.getAttribute('data-title');
+        this.showAiFeedback(isEqual, titleStr, currentCustomer);
+      });
+    });
+  },
+
+  handleAiSnatched(success, customer, correctOpt) {
+    AiRushManager.cleanup();
+    const container = document.querySelector('.game-card-main');
+    if (container.querySelector('.feedback-overlay')) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'feedback-overlay';
+
+    if (success) {
+      AudioSynth.play('wrong');
+      GameState.aiScore++;
+      overlay.innerHTML = `
+        <div class="feedback-emoji">🤖</div>
+        <div class="feedback-title wrong">${autoAnnotate('發條貓搶先送出點心！')}</div>
+        <div class="feedback-reason">
+          ${autoAnnotate(`咔嚓咔嚓！機械發條貓手速超快，搶先為 ${customer} 送上了平分的點心！`)}<br>
+          <span style="font-size:0.95rem; color:#6A1B9A;">🤖 發條貓示範：正確答案是【${correctOpt.title}】喔！</span>
+        </div>
+        <button class="standard-btn primary-btn" id="btn-next-ai-q">搶下一張單 ➡️</button>
+      `;
+    } else {
+      AudioSynth.play('softClick');
+      overlay.innerHTML = `
+        <div class="feedback-emoji">💨</div>
+        <div class="feedback-title" style="color:#F57F17;">${autoAnnotate('發條貓齒輪打滑啦！')}</div>
+        <div class="feedback-reason">
+          ${autoAnnotate(`哎呀！發條貓太急著切，結果切壞點心被退單了！`)}
+        </div>
+        <button class="standard-btn primary-btn" id="btn-next-ai-q">下一位客人 ➡️</button>
+      `;
+    }
+
+    container.appendChild(overlay);
+    document.getElementById('btn-next-ai-q').addEventListener('click', () => {
+      GameState.singleQuestionIndex++;
+      this.nextQuestion();
+    });
+  },
+
+  showAiFeedback(isCorrect, titleStr, customer) {
+    AiRushManager.pause(); // 答題時先暫停發條貓
+    const container = document.querySelector('.game-card-main');
+    if (container.querySelector('.feedback-overlay')) return;
+    
+    const overlay = document.createElement('div');
+    overlay.className = 'feedback-overlay';
+    
+    if (isCorrect) {
+      AiRushManager.cleanup();
+      AudioSynth.play('correct');
+      AppManager.spawnConfetti();
+      GameState.playerAiScore++;
+      overlay.innerHTML = `
+        <div class="feedback-emoji">🎉</div>
+        <div class="feedback-title correct">${autoAnnotate('搶單成功！你比發條貓更快！')}</div>
+        <div class="feedback-reason">
+          ${autoAnnotate(`太厲害了！${customer} 開心地收下了平分的美味點心，給了你一顆星星！`)}
+        </div>
+        <button class="standard-btn primary-btn" id="btn-next-ai-q">下一位客人 ➡️</button>
+      `;
+      container.appendChild(overlay);
+      document.getElementById('btn-next-ai-q').addEventListener('click', () => {
+        GameState.singleQuestionIndex++;
+        this.nextQuestion();
+      });
+    } else {
+      AudioSynth.play('wrong');
+      overlay.innerHTML = `
+        <div class="feedback-emoji">😢</div>
+        <div class="feedback-title wrong">${autoAnnotate('切法不對，客人不收喔！')}</div>
+        <div class="feedback-reason">
+          ${autoAnnotate('這個圖形沒有平分喔！手忙腳亂整理櫃檯中，發條貓正在逼近！')}
+        </div>
+        <button class="standard-btn secondary-btn" id="btn-retry-ai-pick">趕快重新選擇 ⚡</button>
+      `;
+      container.appendChild(overlay);
+      document.getElementById('btn-retry-ai-pick').addEventListener('click', () => {
+        overlay.remove();
+        AiRushManager.resume(); // 恢復發條貓繼續推進
+      });
     }
   },
   
@@ -1546,6 +1864,44 @@ const Game1Manager = {
           </div>
         </div>
       `;
+    } else if (GameState.gameMode === 'ai') {
+      AudioSynth.play('victory');
+      const diffConfig = AiRushManager.getDifficultyConfig();
+      let outcomeBadge = '';
+      let outcomeTitle = '';
+      let outcomeMsg = '';
+
+      if (GameState.playerAiScore > GameState.aiScore) {
+        outcomeBadge = '<div class="complete-badge" style="font-size: 6rem;">🥇</div>';
+        outcomeTitle = `<h2 style="color:#7B1FA2;">${autoAnnotate('🎉 恭喜擊敗機械發條貓！')}</h2>`;
+        outcomeMsg = autoAnnotate(`你的平分眼力超精準，成功搶下 ${GameState.playerAiScore} 份訂單，超越了【${diffConfig.title}】發條貓！`);
+      } else if (GameState.aiScore > GameState.playerAiScore) {
+        outcomeBadge = '<div class="complete-badge" style="font-size: 6rem;">🤖</div>';
+        outcomeTitle = `<h2 style="color:#D81B60;">${autoAnnotate('發條貓略勝一籌！')}</h2>`;
+        outcomeMsg = autoAnnotate(`發條貓搶下了 ${GameState.aiScore} 份訂單！別氣餒，多多觀察平分細節，下次一定能超越它！`);
+      } else {
+        outcomeBadge = '<div class="tie-badge-container"><span>🧑‍🍳</span><span>🤝</span><span>🤖</span></div>';
+        outcomeTitle = `<h2 class="tie-title">${autoAnnotate('🤝 旗鼓相當！平分秋色！')}</h2>`;
+        outcomeMsg = autoAnnotate(`你和發條貓各搶下 ${GameState.playerAiScore} 份訂單，手速與眼力都非常優秀！`);
+      }
+
+      html = `
+        <div class="single-game-layout">
+          <div class="game-complete-card">
+            ${outcomeBadge}
+            ${outcomeTitle}
+            <div style="background: #F3E5F5; width: 100%; padding: 16px; border-radius: var(--radius-sm); margin: 12px 0; border: 1.5px solid #CE93D8;">
+              <p style="font-size: 1.15rem; font-weight: 700; color:#4A148C;">🧑‍🍳 你的戰績：${GameState.playerAiScore} 份訂單</p>
+              <p style="font-size: 1.15rem; font-weight: 700; color:#6A1B9A;">🤖 發條貓（${diffConfig.title}）：${GameState.aiScore} 份訂單</p>
+            </div>
+            <p>${outcomeMsg}</p>
+            <div style="display: flex; gap: 16px; margin-top: 16px;">
+              <button class="standard-btn purple-btn" onclick="Game1Manager.start()">再挑戰一次 🔄</button>
+              <button class="standard-btn secondary-btn" onclick="AppManager.showScreen('screen-menu')">返回選單 🔙</button>
+            </div>
+          </div>
+        </div>
+      `;
     } else {
       AudioSynth.play('victory');
       let winnerBadge = '';
@@ -1614,6 +1970,8 @@ const Game2Manager = {
     GameState.singleScore = 0;
     GameState.p1Score = 0;
     GameState.p2Score = 0;
+    GameState.aiScore = 0;
+    GameState.playerAiScore = 0;
     GameState.singleQuestionIndex = 0;
     GameState.pvpQuestionIndex = 0;
     
@@ -1626,6 +1984,7 @@ const Game2Manager = {
   
   nextQuestion() {
     window.speechSynthesis.cancel();
+    AiRushManager.cleanup();
     
     // 重設切割狀態
     this.singleState = { divider: 4, highlighted: null };
@@ -1637,19 +1996,225 @@ const Game2Manager = {
         this.showFinalScore();
         return;
       }
-      // 單人闖關：依序從已打亂的陣列抽出，確保 5 題完全不重複
       this.currentOrder = this.shuffledOrders[GameState.singleQuestionIndex];
       this.renderSingleQuestion();
+    } else if (GameState.gameMode === 'ai') {
+      if (GameState.playerAiScore >= GameState.aiMaxScore || GameState.aiScore >= GameState.aiMaxScore || GameState.singleQuestionIndex >= 7) {
+        this.showFinalScore();
+        return;
+      }
+      const idx = GameState.singleQuestionIndex % this.shuffledOrders.length;
+      this.currentOrder = this.shuffledOrders[idx];
+      this.renderAiQuestion();
     } else {
       if (GameState.p1Score >= GameState.pvpMaxScore || GameState.p2Score >= GameState.pvpMaxScore) {
         this.showFinalScore();
         return;
       }
-      // 雙人模式：以輪巡方式隨機出題，超出題庫長度則取餘數輪迴
       const idx = GameState.pvpQuestionIndex % this.shuffledOrders.length;
       this.currentOrder = this.shuffledOrders[idx];
       GameState.pvpQuestionIndex++;
       this.renderPvpQuestion();
+    }
+  },
+
+  renderAiQuestion() {
+    const container = document.getElementById('game-2-container');
+    const order = this.currentOrder;
+    const diffConfig = AiRushManager.getDifficultyConfig();
+
+    const shapeText = order.shape === 'circle' ? '個披薩' : '條巧克力';
+    const shapeUnit = order.shape === 'circle' ? '個' : '條';
+    const customers = ["🐻 小熊樂樂", "🐰 白兔雪兒", "🦊 狐狸先生", "🦔 刺蝟小弟", "🦌 小鹿斑比"];
+    const currentCustomer = customers[GameState.singleQuestionIndex % customers.length];
+
+    const qText = `${currentCustomer} 點餐：「我想吃 <span class="math-fraction"><span class="num">1</span><span class="bar"></span><span class="den">${order.targetDen}</span></span> <span class="unit-ge">${shapeUnit}</span>${order.shape === 'circle' ? '披薩' : '巧克力'}！」快切好並點選其中的 <span class="unit-fen">1 份</span> 送去！`;
+    const speechQ = `${currentCustomer} 想要吃 ${order.name} ${shapeUnit} ${order.shape === 'circle' ? '披薩' : '巧克力'}。`;
+
+    let html = `
+      <div class="single-game-layout">
+        <div class="game-card-main">
+          <!-- AI 森林搶單頂部狀態列 -->
+          <div class="ai-rush-header">
+            <div class="ai-rush-info-row">
+              <div class="ai-rush-player-info">
+                <span>🧑‍🍳 小小烘焙師</span>
+                <span class="ai-rush-score-pill">⭐ ${GameState.playerAiScore} 份</span>
+              </div>
+              <div class="ai-customer-badge">
+                <span>${currentCustomer} 的訂單</span>
+              </div>
+              <div class="ai-rush-player-info">
+                <span>🤖 發條貓 (${diffConfig.title})</span>
+                <span class="ai-rush-score-pill">📦 ${GameState.aiScore} 份</span>
+              </div>
+            </div>
+            <!-- 發條貓備餐進度條 -->
+            <div class="ai-progress-track">
+              <div id="ai-rush-fill" class="ai-progress-fill"></div>
+              <div id="ai-rush-timer-label" class="ai-progress-label">🤖 發條貓備餐中...</div>
+            </div>
+          </div>
+          
+          <!-- 題目 -->
+          <div class="question-text-box">
+            <button class="question-speak-btn" id="btn-q2-speak">🔊</button>
+            <span style="font-size: 1.15rem; line-height: 1.7;">${autoAnnotate(qText)}</span>
+          </div>
+          
+          <!-- SVG 畫布 -->
+          <div class="visual-panel" style="border: none; box-shadow: none; padding: 0; min-height: unset; margin: 16px 0;">
+            <div class="svg-container" id="maker-svg-wrap" style="max-width: 200px; height: 200px;"></div>
+            
+            <div class="fraction-display-card" style="margin-top: 12px; padding: 6px 18px;">
+              <div class="fraction-formula" style="font-size: 1.4rem;">
+                <div id="maker-num">0</div>
+                <div class="fraction-bar" style="width: 22px;"></div>
+                <div id="maker-den">${this.singleState.divider}</div>
+              </div>
+              <div class="fraction-name" id="maker-fraction-name" style="font-size: 1.1rem;">(請點選其中 1 份)</div>
+            </div>
+          </div>
+          
+          <!-- 操作控制區 -->
+          <div class="maker-operation-area">
+            <div class="maker-slider-group">
+              <label>${autoAnnotate('切割份數：')}</label>
+              <input type="range" id="maker-range" min="2" max="12" value="${this.singleState.divider}" step="1">
+              <span class="range-value-bubble" id="maker-bubble" style="min-width: 50px;">${this.singleState.divider}</span>
+            </div>
+            <button class="play-btn purple-btn" id="btn-maker-submit" style="max-width: 260px; font-size: 1.15rem; padding: 10px 0;">
+              ${autoAnnotate('搶先送給顧客 🚀')}
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    container.innerHTML = html;
+
+    // 朗讀
+    document.getElementById('btn-q2-speak').addEventListener('click', () => {
+      SpeechEngine.speak(speechQ);
+    });
+    if (GameState.autoRead) {
+      SpeechEngine.speak(speechQ);
+    }
+
+    this.renderMakerSvg('single');
+
+    // 啟動發條貓倒數
+    AiRushManager.startRound({
+      game: 'game2',
+      onAiSnatched: (success) => {
+        this.handleAiSnatched(success, currentCustomer, order);
+      }
+    });
+
+    // 拉桿與點擊
+    const range = document.getElementById('maker-range');
+    range.oninput = (e) => {
+      const val = parseInt(e.target.value);
+      this.singleState.divider = val;
+      this.singleState.highlighted = null;
+      document.getElementById('maker-bubble').innerText = val;
+      this.renderMakerSvg('single');
+    };
+
+    document.getElementById('btn-maker-submit').addEventListener('click', () => {
+      this.submitAiAnswer(currentCustomer, order);
+    });
+  },
+
+  handleAiSnatched(success, customer, order) {
+    AiRushManager.cleanup();
+    const container = document.querySelector('.game-card-main');
+    if (container.querySelector('.feedback-overlay')) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'feedback-overlay';
+
+    if (success) {
+      AudioSynth.play('wrong');
+      GameState.aiScore++;
+      overlay.innerHTML = `
+        <div class="feedback-emoji">🤖</div>
+        <div class="feedback-title wrong">${autoAnnotate('發條貓搶先送達點心！')}</div>
+        <div class="feedback-reason">
+          ${autoAnnotate(`咔嚓！發條貓先切好了 ${order.name} 並送交給 ${customer}！`)}<br>
+          <span style="font-size:0.95rem; color:#6A1B9A;">🤖 發條貓示範：平分成 ${order.targetDen} 份並選取 1 份就是 ${order.name} 喔！</span>
+        </div>
+        <button class="standard-btn primary-btn" id="btn-next-ai-q2">搶下一張單 ➡️</button>
+      `;
+    } else {
+      AudioSynth.play('softClick');
+      overlay.innerHTML = `
+        <div class="feedback-emoji">💨</div>
+        <div class="feedback-title" style="color:#F57F17;">${autoAnnotate('發條貓刀片卡住了！')}</div>
+        <div class="feedback-reason">
+          ${autoAnnotate(`發條貓切分錯誤，被退單了！`)}
+        </div>
+        <button class="standard-btn primary-btn" id="btn-next-ai-q2">下一位客人 ➡️</button>
+      `;
+    }
+
+    container.appendChild(overlay);
+    document.getElementById('btn-next-ai-q2').addEventListener('click', () => {
+      GameState.singleQuestionIndex++;
+      this.nextQuestion();
+    });
+  },
+
+  submitAiAnswer(customer, order) {
+    AiRushManager.pause();
+    const state = this.singleState;
+    const mainCard = document.querySelector('.game-card-main');
+    if (mainCard.querySelector('.feedback-overlay')) return;
+
+    const isCorrect = (state.divider === order.targetDen && state.highlighted !== null);
+    const overlay = document.createElement('div');
+    overlay.className = 'feedback-overlay';
+
+    if (isCorrect) {
+      AiRushManager.cleanup();
+      AudioSynth.play('correct');
+      AppManager.spawnConfetti();
+      GameState.playerAiScore++;
+      overlay.innerHTML = `
+        <div class="feedback-emoji">🧑‍🍳</div>
+        <div class="feedback-title correct">${autoAnnotate('搶單成功！你比發條貓更快！')}</div>
+        <div class="feedback-reason">
+          ${autoAnnotate(`太厲害了！成功做出了 ${order.name} 送給 ${customer}，獲得了好評星星！`)}
+        </div>
+        <button class="standard-btn primary-btn" id="btn-next-ai-q2">下一位客人 ➡️</button>
+      `;
+      mainCard.appendChild(overlay);
+      document.getElementById('btn-next-ai-q2').addEventListener('click', () => {
+        GameState.singleQuestionIndex++;
+        this.nextQuestion();
+      });
+    } else {
+      AudioSynth.play('wrong');
+      const shapeUnitStr = order.shape === 'circle' ? '個' : '條';
+      const shapeName = order.shape === 'circle' ? '蛋糕' : '巧克力';
+      let reasonHtml = '';
+      if (state.highlighted === null) {
+        reasonHtml = autoAnnotate(`你把點心切好了，但別忘了點選其中的 1 份裝盤喔！`);
+      } else {
+        reasonHtml = autoAnnotate(`要把點心平分成 ${order.targetDen} 份，其中的 1 份才是 ${order.name} 喔！`);
+      }
+
+      overlay.innerHTML = `
+        <div class="feedback-emoji">😢</div>
+        <div class="feedback-title wrong">${autoAnnotate('切法不對，客人不收喔！')}</div>
+        <div class="feedback-reason">${reasonHtml}</div>
+        <button class="standard-btn secondary-btn" id="btn-retry-ai-cut">重新調整切分 ⚡</button>
+      `;
+      mainCard.appendChild(overlay);
+      document.getElementById('btn-retry-ai-cut').addEventListener('click', () => {
+        overlay.remove();
+        AiRushManager.resume();
+      });
     }
   },
   
@@ -2142,6 +2707,44 @@ const Game2Manager = {
           </div>
         </div>
       `;
+    } else if (GameState.gameMode === 'ai') {
+      AudioSynth.play('victory');
+      const diffConfig = AiRushManager.getDifficultyConfig();
+      let outcomeBadge = '';
+      let outcomeTitle = '';
+      let outcomeMsg = '';
+
+      if (GameState.playerAiScore > GameState.aiScore) {
+        outcomeBadge = '<div class="complete-badge" style="font-size: 6rem;">🥇</div>';
+        outcomeTitle = `<h2 style="color:#7B1FA2;">${autoAnnotate('🎉 恭喜擊敗機械發條貓！')}</h2>`;
+        outcomeMsg = autoAnnotate(`你刀法神速、份數精準，成功送出 ${GameState.playerAiScore} 份點心，擊敗了【${diffConfig.title}】發條貓！`);
+      } else if (GameState.aiScore > GameState.playerAiScore) {
+        outcomeBadge = '<div class="complete-badge" style="font-size: 6rem;">🤖</div>';
+        outcomeTitle = `<h2 style="color:#D81B60;">${autoAnnotate('發條貓出餐更快！')}</h2>`;
+        outcomeMsg = autoAnnotate(`發條貓搶下了 ${GameState.aiScore} 份訂單！再練熟切分拉桿與裝盤，下次一定能搶先！`);
+      } else {
+        outcomeBadge = '<div class="tie-badge-container"><span>🧑‍🍳</span><span>🤝</span><span>🤖</span></div>';
+        outcomeTitle = `<h2 class="tie-title">${autoAnnotate('🤝 旗鼓相當！平分秋色！')}</h2>`;
+        outcomeMsg = autoAnnotate(`你和發條貓各成功送出 ${GameState.playerAiScore} 份點心，都是高超的點心魔法師！`);
+      }
+
+      html = `
+        <div class="single-game-layout">
+          <div class="game-complete-card">
+            ${outcomeBadge}
+            ${outcomeTitle}
+            <div style="background: #F3E5F5; width: 100%; padding: 16px; border-radius: var(--radius-sm); margin: 12px 0; border: 1.5px solid #CE93D8;">
+              <p style="font-size: 1.15rem; font-weight: 700; color:#4A148C;">🧑‍🍳 你的戰績：${GameState.playerAiScore} 份點心</p>
+              <p style="font-size: 1.15rem; font-weight: 700; color:#6A1B9A;">🤖 發條貓（${diffConfig.title}）：${GameState.aiScore} 份點心</p>
+            </div>
+            <p>${outcomeMsg}</p>
+            <div style="display: flex; gap: 16px; margin-top: 16px;">
+              <button class="standard-btn purple-btn" onclick="Game2Manager.start()">再挑戰一次 🔄</button>
+              <button class="standard-btn secondary-btn" onclick="AppManager.showScreen('screen-menu')">返回選單 🔙</button>
+            </div>
+          </div>
+        </div>
+      `;
     } else {
       AudioSynth.play('victory');
       let winnerBadge = '';
@@ -2208,6 +2811,8 @@ const Game3Manager = {
     GameState.singleScore = 0;
     GameState.p1Score = 0;
     GameState.p2Score = 0;
+    GameState.aiScore = 0;
+    GameState.playerAiScore = 0;
     GameState.singleQuestionIndex = 0;
     GameState.pvpQuestionIndex = 0;
     GameState.pvpLocked = false;
@@ -2221,6 +2826,7 @@ const Game3Manager = {
   
   nextQuestion() {
     window.speechSynthesis.cancel();
+    AiRushManager.cleanup();
     
     if (GameState.gameMode === 'single') {
       if (GameState.singleQuestionIndex >= GameState.maxQuestions) {
@@ -2228,6 +2834,12 @@ const Game3Manager = {
         return;
       }
       this.renderSingleQuestion();
+    } else if (GameState.gameMode === 'ai') {
+      if (GameState.playerAiScore >= GameState.aiMaxScore || GameState.aiScore >= GameState.aiMaxScore || GameState.singleQuestionIndex >= 7) {
+        this.showFinalScore();
+        return;
+      }
+      this.renderAiQuestion();
     } else {
       if (GameState.p1Score >= GameState.pvpMaxScore || GameState.p2Score >= GameState.pvpMaxScore) {
         this.showFinalScore();
@@ -2237,6 +2849,220 @@ const Game3Manager = {
       GameState.pvpLocked = false;
       GameState.pvpTurn = null;
       this.renderPvpQuestion();
+    }
+  },
+
+  renderAiQuestion() {
+    const container = document.getElementById('game-3-container');
+    const q = this.shuffledQuestions[GameState.singleQuestionIndex % this.shuffledQuestions.length];
+    GameState.currentQuestionData = q;
+    const diffConfig = AiRushManager.getDifficultyConfig();
+
+    const shapeUnitStr = q.shape === 'circle' ? '個' : '條';
+    const shapeNameStr = q.shape === 'circle' ? '蛋糕' : '巧克力';
+    const customers = ["🐻 大胃王黑熊", "🐼 貪吃大熊貓", "🐨 樹懶樹寶", "🦝 貪吃浣熊", "🦁 獅子國王"];
+    const currentCustomer = customers[GameState.singleQuestionIndex % customers.length];
+
+    const questionText = `${currentCustomer} 點餐：「我想吃比較大份的${shapeNameStr}！」誰分到的點心比較大份？`;
+    const speechText = `${currentCustomer} 想吃比較大份的點心，誰分到的點心比較大份？`;
+
+    let html = `
+      <div class="single-game-layout">
+        <div class="game-card-main">
+          <!-- AI 森林搶單頂部狀態列 -->
+          <div class="ai-rush-header">
+            <div class="ai-rush-info-row">
+              <div class="ai-rush-player-info">
+                <span>🧑‍🍳 小小烘焙師</span>
+                <span class="ai-rush-score-pill">⭐ ${GameState.playerAiScore} 份</span>
+              </div>
+              <div class="ai-customer-badge">
+                <span>${currentCustomer} 的大胃王訂單</span>
+              </div>
+              <div class="ai-rush-player-info">
+                <span>🤖 發條貓 (${diffConfig.title})</span>
+                <span class="ai-rush-score-pill">📦 ${GameState.aiScore} 份</span>
+              </div>
+            </div>
+            <!-- 發條貓備餐進度條 -->
+            <div class="ai-progress-track">
+              <div id="ai-rush-fill" class="ai-progress-fill"></div>
+              <div id="ai-rush-timer-label" class="ai-progress-label">🤖 發條貓比大小中...</div>
+            </div>
+          </div>
+          
+          <!-- 題目 -->
+          <div class="question-text-box" style="flex-direction: column; align-items: center; gap: 8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <button class="question-speak-btn" id="btn-q3-speak">🔊</button>
+              <span style="font-weight:700; font-size:1.3rem;">${autoAnnotate(questionText)}</span>
+            </div>
+            <p style="font-size: 1.05rem; color: var(--color-text-muted); line-height: 1.7;">
+              ${autoAnnotate(`小熊樂樂吃了 <span class="math-fraction"><span class="num">1</span><span class="bar"></span><span class="den">${q.den1}</span></span> ${shapeUnitStr}${shapeNameStr}，小貓咪咪吃了 <span class="math-fraction"><span class="num">1</span><span class="bar"></span><span class="den">${q.den2}</span></span> ${shapeUnitStr}${shapeNameStr}。`)}
+            </p>
+          </div>
+          
+          <!-- 卡片選項比較 -->
+          <div class="comparison-layout">
+            <div class="comparison-options">
+              <!-- 小熊樂樂 (1/den1) -->
+              <div class="comparison-option-card" id="ai-opt-bear" data-target="bear">
+                <span class="option-character">🐻</span>
+                <span class="choice-label-text" style="color: #8D6E63;">${autoAnnotate('小熊樂樂')}</span>
+                <div class="option-svg-wrap">
+                  ${q.shape === 'circle' ? SVGRenderer.drawCircleFraction(q.den1, 0) : SVGRenderer.drawRectFraction(q.den1, 0)}
+                </div>
+                <div class="option-fraction-label">
+                  <div class="text-fraction"><span>1</span><span></span><span>${q.den1}</span></div>
+                  <span class="text-phrase">${autoAnnotate(shapeUnitStr + shapeNameStr)}</span>
+                </div>
+              </div>
+              
+              <!-- 小貓咪咪 (1/den2) -->
+              <div class="comparison-option-card" id="ai-opt-cat" data-target="cat">
+                <span class="option-character">🐱</span>
+                <span class="choice-label-text" style="color: #FF8A80;">${autoAnnotate('小貓咪咪')}</span>
+                <div class="option-svg-wrap">
+                  ${q.shape === 'circle' ? SVGRenderer.drawCircleFraction(q.den2, 0) : SVGRenderer.drawRectFraction(q.den2, 0)}
+                </div>
+                <div class="option-fraction-label">
+                  <div class="text-fraction"><span>1</span><span></span><span>${q.den2}</span></div>
+                  <span class="text-phrase">${autoAnnotate(shapeUnitStr + shapeNameStr)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    container.innerHTML = html;
+
+    // 朗讀
+    document.getElementById('btn-q3-speak').addEventListener('click', () => {
+      SpeechEngine.speak(speechText);
+    });
+    if (GameState.autoRead) {
+      SpeechEngine.speak(speechText);
+    }
+
+    // 正確答案（分母較小者較大）
+    const correctAns = q.den1 < q.den2 ? 'bear' : 'cat';
+    const correctName = correctAns === 'bear' ? '小熊樂樂' : '小貓咪咪';
+    const bigDen = correctAns === 'bear' ? q.den1 : q.den2;
+    const smallDen = correctAns === 'bear' ? q.den2 : q.den1;
+
+    // 啟動發條貓倒數
+    AiRushManager.startRound({
+      game: 'game3',
+      onAiSnatched: (success) => {
+        this.handleAiSnatched(success, currentCustomer, correctName, bigDen, smallDen);
+      }
+    });
+
+    // 點擊選項
+    document.getElementById('ai-opt-bear').onclick = () => {
+      if (!AiRushManager.isAiActive) return;
+      this.submitAiAnswer('bear', currentCustomer);
+    };
+    document.getElementById('ai-opt-cat').onclick = () => {
+      if (!AiRushManager.isAiActive) return;
+      this.submitAiAnswer('cat', currentCustomer);
+    };
+  },
+
+  handleAiSnatched(success, customer, correctName, bigDen, smallDen) {
+    AiRushManager.cleanup();
+    const container = document.querySelector('.game-card-main');
+    if (container.querySelector('.feedback-overlay')) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'feedback-overlay';
+
+    if (success) {
+      AudioSynth.play('wrong');
+      GameState.aiScore++;
+      overlay.innerHTML = `
+        <div class="feedback-emoji">🤖</div>
+        <div class="feedback-title wrong">${autoAnnotate('發條貓搶先送出大份點心！')}</div>
+        <div class="feedback-reason">
+          ${autoAnnotate(`發條貓迅速算好分母，搶先把比較大份的【${correctName}】送給 ${customer}！`)}<br>
+          <span style="font-size:0.95rem; color:#6A1B9A;">🤖 發條貓提醒：分母越小（${bigDen} < ${smallDen}），每一份就分得越大喔！</span>
+        </div>
+        <button class="standard-btn primary-btn" id="btn-next-ai-q3">搶下一張單 ➡️</button>
+      `;
+    } else {
+      AudioSynth.play('softClick');
+      overlay.innerHTML = `
+        <div class="feedback-emoji">💨</div>
+        <div class="feedback-title" style="color:#F57F17;">${autoAnnotate('發條貓算錯了！')}</div>
+        <div class="feedback-reason">
+          ${autoAnnotate(`發條貓誤以為分母大的比較大，拿小份點心被客人退貨了！`)}
+        </div>
+        <button class="standard-btn primary-btn" id="btn-next-ai-q3">下一位客人 ➡️</button>
+      `;
+    }
+
+    container.appendChild(overlay);
+    document.getElementById('btn-next-ai-q3').addEventListener('click', () => {
+      GameState.singleQuestionIndex++;
+      this.nextQuestion();
+    });
+  },
+
+  submitAiAnswer(choice, customer) {
+    const q = GameState.currentQuestionData;
+    const correctAns = q.den1 < q.den2 ? 'bear' : 'cat';
+    const isCorrect = (choice === correctAns);
+    AiRushManager.pause();
+
+    const mainCard = document.querySelector('.game-card-main');
+    if (mainCard.querySelector('.feedback-overlay')) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'feedback-overlay';
+
+    if (isCorrect) {
+      AiRushManager.cleanup();
+      AudioSynth.play('correct');
+      AppManager.spawnConfetti();
+      GameState.playerAiScore++;
+      const bigDen = choice === 'bear' ? q.den1 : q.den2;
+      const smallDen = choice === 'bear' ? q.den2 : q.den1;
+
+      overlay.innerHTML = `
+        <div class="feedback-emoji">🎉</div>
+        <div class="feedback-title correct">${autoAnnotate('搶單成功！你比發條貓更懂分數！')}</div>
+        <div class="feedback-reason">
+          ${autoAnnotate(`太棒了！${customer} 吃到滿足的大份點心，給了你一顆讚賞星星！`)}<br>
+          <span style="font-size:0.95rem; color:#4CAF50;">💡 平分給 ${bigDen} 人比平分給 ${smallDen} 人分到的還要多喔！</span>
+        </div>
+        <button class="standard-btn primary-btn" id="btn-next-ai-q3">下一位客人 ➡️</button>
+      `;
+      mainCard.appendChild(overlay);
+      document.getElementById('btn-next-ai-q3').addEventListener('click', () => {
+        GameState.singleQuestionIndex++;
+        this.nextQuestion();
+      });
+    } else {
+      AudioSynth.play('wrong');
+      const rightName = correctAns === 'bear' ? '小熊樂樂' : '小貓咪咪';
+      const rightDen = correctAns === 'bear' ? q.den1 : q.den2;
+      const wrongDen = correctAns === 'bear' ? q.den2 : q.den1;
+
+      overlay.innerHTML = `
+        <div class="feedback-emoji">😢</div>
+        <div class="feedback-title wrong">${autoAnnotate('點心太小塊，客人不滿意喔！')}</div>
+        <div class="feedback-reason">
+          ${autoAnnotate(`客人要吃比較大份的！平分成 ${rightDen} 份會比平分成 ${wrongDen} 份更大喔！發條貓正在加速逼近！`)}
+        </div>
+        <button class="standard-btn secondary-btn" id="btn-retry-ai-comp">重新選大份點心 ⚡</button>
+      `;
+      mainCard.appendChild(overlay);
+      document.getElementById('btn-retry-ai-comp').addEventListener('click', () => {
+        overlay.remove();
+        AiRushManager.resume();
+      });
     }
   },
   
@@ -2731,6 +3557,44 @@ const Game3Manager = {
             <p>${autoAnnotate(`你順利通過了比大小考驗，得到 ${GameState.singleScore} 顆星星！`)}</p>
             <div style="display: flex; gap: 16px; margin-top: 16px;">
               <button class="standard-btn primary-btn" onclick="Game3Manager.start()">再玩一次 🔄</button>
+              <button class="standard-btn secondary-btn" onclick="AppManager.showScreen('screen-menu')">返回選單 🔙</button>
+            </div>
+          </div>
+        </div>
+      `;
+    } else if (GameState.gameMode === 'ai') {
+      AudioSynth.play('victory');
+      const diffConfig = AiRushManager.getDifficultyConfig();
+      let outcomeBadge = '';
+      let outcomeTitle = '';
+      let outcomeMsg = '';
+
+      if (GameState.playerAiScore > GameState.aiScore) {
+        outcomeBadge = '<div class="complete-badge" style="font-size: 6rem;">🥇</div>';
+        outcomeTitle = `<h2 style="color:#7B1FA2;">${autoAnnotate('🎉 恭喜擊敗機械發條貓！')}</h2>`;
+        outcomeMsg = autoAnnotate(`你對單位分數大小判斷神速，成功搶下 ${GameState.playerAiScore} 份大胃王訂單，超越了【${diffConfig.title}】發條貓！`);
+      } else if (GameState.aiScore > GameState.playerAiScore) {
+        outcomeBadge = '<div class="complete-badge" style="font-size: 6rem;">🤖</div>';
+        outcomeTitle = `<h2 style="color:#D81B60;">${autoAnnotate('發條貓算得更快！')}</h2>`;
+        outcomeMsg = autoAnnotate(`發條貓搶下了 ${GameState.aiScore} 份訂單！牢記「分母越小每一份越大」，下次一定能完勝發條貓！`);
+      } else {
+        outcomeBadge = '<div class="tie-badge-container"><span>🧑‍🍳</span><span>🤝</span><span>🤖</span></div>';
+        outcomeTitle = `<h2 class="tie-title">${autoAnnotate('🤝 旗鼓相當！平分秋色！')}</h2>`;
+        outcomeMsg = autoAnnotate(`你和發條貓各搶下 ${GameState.playerAiScore} 份大胃王訂單，都是最厲害的分數比大小達人！`);
+      }
+
+      html = `
+        <div class="single-game-layout">
+          <div class="game-complete-card">
+            ${outcomeBadge}
+            ${outcomeTitle}
+            <div style="background: #F3E5F5; width: 100%; padding: 16px; border-radius: var(--radius-sm); margin: 12px 0; border: 1.5px solid #CE93D8;">
+              <p style="font-size: 1.15rem; font-weight: 700; color:#4A148C;">🧑‍🍳 你的戰績：${GameState.playerAiScore} 份訂單</p>
+              <p style="font-size: 1.15rem; font-weight: 700; color:#6A1B9A;">🤖 發條貓（${diffConfig.title}）：${GameState.aiScore} 份訂單</p>
+            </div>
+            <p>${outcomeMsg}</p>
+            <div style="display: flex; gap: 16px; margin-top: 16px;">
+              <button class="standard-btn purple-btn" onclick="Game3Manager.start()">再挑戰一次 🔄</button>
               <button class="standard-btn secondary-btn" onclick="AppManager.showScreen('screen-menu')">返回選單 🔙</button>
             </div>
           </div>
