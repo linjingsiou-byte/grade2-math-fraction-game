@@ -647,6 +647,49 @@ const SVGRenderer = {
     </svg>`;
     
     return svgContent;
+  },
+
+  // 優化一：繪製常駐「單位 1（完整點心）」視覺錨定橫幅 HTML
+  drawUnitWholeAnchor(shape, divider, isTargetHint = false) {
+    const isCircle = (shape === 'circle');
+    const unitWord = isCircle ? '1 個蛋糕' : '1 條巧克力';
+    const partUnit = isCircle ? '份' : '塊';
+
+    let miniSvg = '';
+    if (isCircle) {
+      miniSvg = `
+        <svg viewBox="0 0 100 100">
+          <circle cx="50" cy="53" r="44" fill="#D7CCC8" opacity="0.5"/>
+          <circle cx="50" cy="50" r="42" fill="#FFF8E1" stroke="#FFA000" stroke-width="4"/>
+          <circle cx="50" cy="50" r="34" fill="#FFECB3" stroke="#FFD54F" stroke-width="2" stroke-dasharray="4 2"/>
+          <!-- 中央小草莓裝飾象徵完整 1 個蛋糕 -->
+          <path d="M 50,36 C 55,30 62,36 58,48 C 55,55 50,62 50,62 C 50,62 45,55 42,48 C 38,36 45,30 50,36 Z" fill="#E53935"/>
+          <path d="M 45,36 C 48,39 52,39 55,36 L 50,42 Z" fill="#4CAF50"/>
+        </svg>
+      `;
+    } else {
+      miniSvg = `
+        <svg viewBox="0 0 140 70">
+          <rect x="6" y="12" width="128" height="50" rx="8" fill="#D7CCC8" opacity="0.5"/>
+          <rect x="6" y="8" width="128" height="50" rx="8" fill="#6D4C41" stroke="#3E2723" stroke-width="3"/>
+          <rect x="16" y="16" width="108" height="34" rx="4" fill="none" stroke="#A1887F" stroke-width="2"/>
+        </svg>
+      `;
+    }
+
+    const actionText = isTargetHint
+      ? `目標：平分成 <strong>${divider} ${partUnit}</strong>，取 <strong>1 ${partUnit}</strong>`
+      : `✂️ 平分成 <strong>${divider} ${partUnit}</strong>`;
+
+    return `
+      <div class="unit-anchor-item">
+        <div class="unit-anchor-svg ${isCircle ? '' : 'rect-svg'}">${miniSvg}</div>
+        <div class="unit-anchor-label">
+          基準：<span class="whole-highlight">完整的 ${unitWord} (1)</span>
+        </div>
+      </div>
+      <div class="unit-anchor-arrow">➔ ${actionText}</div>
+    `;
   }
 };
 
@@ -877,6 +920,12 @@ const AppManager = {
       });
     }
     container.innerHTML = svgHtml;
+
+    // 優化一：更新「單位 1（完整點心）」常駐視覺錨定
+    const anchorEl = document.getElementById('explorer-unit-anchor');
+    if (anchorEl) {
+      anchorEl.innerHTML = SVGRenderer.drawUnitWholeAnchor(es.shape, es.divider, false);
+    }
     
     // 更新選取事件監聽 (動態加入 click)
     const paths = container.querySelectorAll('.slice-path');
@@ -1188,6 +1237,147 @@ const Game1Manager = {
       }
     }
   ],
+  // --------------------------------------------------
+  // 優化二：拿起來疊疊看 (Superimposition) 幾何疊合動態驗證動畫
+  // --------------------------------------------------
+  renderSuperimposeAnimation(templateId, isEqual) {
+    let svgBody = '';
+    
+    // 依 templateId 或幾何類別產生專屬疊合 SVG
+    if (isEqual) {
+      if (templateId && templateId.startsWith('circle')) {
+        // 圓形平分：兩片 1/2 圓疊合
+        svgBody = `
+          <svg viewBox="0 0 220 110">
+            <!-- 底層固定片 (第一片) -->
+            <path d="M 55 15 A 40 40 0 0 0 55 95 Z" fill="#FFE082" stroke="#F57C00" stroke-width="2.5"/>
+            <text x="35" y="60" text-anchor="middle" font-size="12pt" font-weight="bold" fill="#795548">第一片</text>
+            <!-- 滑動重疊片 (第二片) -->
+            <g class="superimpose-moving" style="--start-x: 90px; --start-y: 0px;">
+              <path d="M 55 15 A 40 40 0 0 0 55 95 Z" fill="#81C784" fill-opacity="0.8" stroke="#2E7D32" stroke-width="2.5" stroke-dasharray="4,2"/>
+              <text x="35" y="60" text-anchor="middle" font-size="12pt" font-weight="bold" fill="#1B5E20">第二片</text>
+            </g>
+          </svg>
+        `;
+      } else if (templateId && templateId.startsWith('triangle')) {
+        // 三角形平分：左右兩片對稱直角三角形疊合
+        svgBody = `
+          <svg viewBox="0 0 220 110">
+            <!-- 底層固定片 -->
+            <polygon points="65,15 20,95 65,95" fill="#FFE082" stroke="#F57C00" stroke-width="2.5"/>
+            <text x="50" y="70" text-anchor="middle" font-size="12pt" font-weight="bold" fill="#795548">左半片</text>
+            <!-- 滑動重疊片 -->
+            <g class="superimpose-moving" style="--start-x: 80px; --start-y: 0px;">
+              <polygon points="65,15 20,95 65,95" fill="#81C784" fill-opacity="0.8" stroke="#2E7D32" stroke-width="2.5" stroke-dasharray="4,2"/>
+              <text x="50" y="70" text-anchor="middle" font-size="12pt" font-weight="bold" fill="#1B5E20">右半片</text>
+            </g>
+          </svg>
+        `;
+      } else if (templateId && (templateId.includes('diag') || templateId === 'square_eq_4')) {
+        // 對角線等分：三角形切片疊合
+        svgBody = `
+          <svg viewBox="0 0 220 110">
+            <!-- 底層固定三角形 -->
+            <polygon points="25,20 95,20 25,90" fill="#FFE082" stroke="#F57C00" stroke-width="2.5"/>
+            <text x="45" y="45" text-anchor="middle" font-size="12pt" font-weight="bold" fill="#795548">第一片</text>
+            <!-- 滑動重疊三角形 -->
+            <g class="superimpose-moving" style="--start-x: 85px; --start-y: 0px;">
+              <polygon points="25,20 95,20 25,90" fill="#81C784" fill-opacity="0.8" stroke="#2E7D32" stroke-width="2.5" stroke-dasharray="4,2"/>
+              <text x="45" y="45" text-anchor="middle" font-size="12pt" font-weight="bold" fill="#1B5E20">第二片</text>
+            </g>
+          </svg>
+        `;
+      } else {
+        // 長方形 / 正方形平分：矩形切片疊合
+        svgBody = `
+          <svg viewBox="0 0 220 110">
+            <!-- 底層固定片 -->
+            <rect x="25" y="20" width="55" height="70" rx="4" fill="#FFE082" stroke="#F57C00" stroke-width="2.5"/>
+            <text x="52" y="60" text-anchor="middle" font-size="12pt" font-weight="bold" fill="#795548">第一片</text>
+            <!-- 滑動重疊片 -->
+            <g class="superimpose-moving" style="--start-x: 85px; --start-y: 0px;">
+              <rect x="25" y="20" width="55" height="70" rx="4" fill="#81C784" fill-opacity="0.8" stroke="#2E7D32" stroke-width="2.5" stroke-dasharray="4,2"/>
+              <text x="52" y="60" text-anchor="middle" font-size="12pt" font-weight="bold" fill="#1B5E20">第二片</text>
+            </g>
+          </svg>
+        `;
+      }
+    } else {
+      // 不平分：大小不同，顯示疊合後的差額紅光標示
+      if (templateId && templateId.startsWith('circle')) {
+        svgBody = `
+          <svg viewBox="0 0 220 110">
+            <!-- 底層大塊 -->
+            <path d="M 25 15 L 75 15 A 40 40 0 0 1 75 95 L 25 95 Z" fill="#FFE082" stroke="#F57C00" stroke-width="2"/>
+            <text x="42" y="60" text-anchor="middle" font-size="12pt" font-weight="bold" fill="#795548">大塊</text>
+            <!-- 多出來的不平分差額區域 (紅色脈衝) -->
+            <g class="superimpose-diff">
+              <path d="M 52 15 L 75 15 A 40 40 0 0 1 75 95 L 52 95 Z" fill="#FFCDD2" stroke="#C62828" stroke-width="2" stroke-dasharray="3,2"/>
+              <text x="64" y="58" text-anchor="middle" font-size="12pt" font-weight="bold" fill="#C62828">多出!</text>
+            </g>
+            <!-- 滑動重疊小塊 (由右側滑入疊合) -->
+            <g class="superimpose-moving" style="--start-x: 85px; --start-y: 0px;">
+              <path d="M 25 15 L 52 15 L 52 95 L 25 95 Z" fill="#90CAF9" fill-opacity="0.85" stroke="#1976D2" stroke-width="2.5"/>
+              <text x="38" y="60" text-anchor="middle" font-size="12pt" font-weight="bold" fill="#0D47A1">小塊</text>
+            </g>
+          </svg>
+        `;
+      } else if (templateId && templateId.startsWith('triangle')) {
+        svgBody = `
+          <svg viewBox="0 0 220 110">
+            <!-- 底層大梯形 -->
+            <polygon points="35,45 85,45 105,95 15,95" fill="#FFE082" stroke="#F57C00" stroke-width="2"/>
+            <!-- 差額區域 (梯形兩側與底部多出的部分) -->
+            <g class="superimpose-diff">
+              <polygon points="15,95 105,95 85,45 70,70 50,70 35,45" fill="#FFCDD2" stroke="#C62828" stroke-width="2" stroke-dasharray="3,2"/>
+              <text x="60" y="88" text-anchor="middle" font-size="12pt" font-weight="bold" fill="#C62828">多出!</text>
+            </g>
+            <!-- 滑動重疊上方小三角形 -->
+            <g class="superimpose-moving" style="--start-x: 75px; --start-y: 0px;">
+              <polygon points="60,20 35,65 85,65" fill="#90CAF9" fill-opacity="0.85" stroke="#1976D2" stroke-width="2.5"/>
+              <text x="60" y="52" text-anchor="middle" font-size="12pt" font-weight="bold" fill="#0D47A1">小尖角</text>
+            </g>
+          </svg>
+        `;
+      } else {
+        // 長方形 / 正方形不平分
+        svgBody = `
+          <svg viewBox="0 0 220 110">
+            <!-- 底層大塊點心 -->
+            <rect x="25" y="20" width="75" height="70" rx="4" fill="#FFE082" stroke="#F57C00" stroke-width="2"/>
+            <!-- 差額區域 (右半部多出部分，紅色脈衝) -->
+            <g class="superimpose-diff">
+              <rect x="62" y="20" width="38" height="70" rx="4" fill="#FFCDD2" stroke="#C62828" stroke-width="2" stroke-dasharray="3,2"/>
+              <text x="81" y="58" text-anchor="middle" font-size="12pt" font-weight="bold" fill="#C62828">多出!</text>
+            </g>
+            <!-- 滑動重疊小塊 -->
+            <g class="superimpose-moving" style="--start-x: 85px; --start-y: 0px;">
+              <rect x="25" y="20" width="37" height="70" rx="4" fill="#90CAF9" fill-opacity="0.85" stroke="#1976D2" stroke-width="2.5"/>
+              <text x="43" y="60" text-anchor="middle" font-size="12pt" font-weight="bold" fill="#0D47A1">小塊</text>
+            </g>
+          </svg>
+        `;
+      }
+    }
+
+    const captionText = isEqual
+      ? '✨ 拿起來疊疊看：兩塊完全重疊，一樣大！'
+      : '❌ 拿起來疊疊看：邊界凸出一大塊，大小不一樣！';
+
+    return `
+      <div class="superimpose-box ${isEqual ? 'is-equal' : 'is-unequal'}">
+        <div class="superimpose-header">
+          <span>📐 魔法疊疊看小放大鏡</span>
+        </div>
+        <div class="superimpose-stage">
+          ${svgBody}
+        </div>
+        <div class="superimpose-caption ${isEqual ? 'eq-text' : 'neq-text'}">
+          ${autoAnnotate(captionText)}
+        </div>
+      </div>
+    `;
+  },
   
   start() {
     GameState.singleScore = 0;
@@ -1288,7 +1478,7 @@ const Game1Manager = {
           <!-- 選項網格 -->
           <div class="detective-choices" id="ai-choices-grid">
             ${options.map((opt, i) => `
-              <div class="detective-choice-card" data-equal="${opt.isEqual}" data-title="${opt.title}">
+              <div class="detective-choice-card" data-id="${opt.id}" data-equal="${opt.isEqual}" data-title="${opt.title}">
                 <div class="choice-svg-wrap">${opt.draw()}</div>
                 <div class="choice-label-text">${autoAnnotate('圖形 ' + numToChinese[i+1])}</div>
               </div>
@@ -1322,7 +1512,8 @@ const Game1Manager = {
         if (!AiRushManager.isAiActive) return;
         const isEqual = e.currentTarget.getAttribute('data-equal') === 'true';
         const titleStr = e.currentTarget.getAttribute('data-title');
-        this.showAiFeedback(isEqual, titleStr, currentCustomer);
+        const optId = e.currentTarget.getAttribute('data-id');
+        this.showAiFeedback(isEqual, titleStr, currentCustomer, optId);
       });
     });
   },
@@ -1338,6 +1529,7 @@ const Game1Manager = {
     if (success) {
       AudioSynth.play('wrong');
       GameState.aiScore++;
+      const superimposeHtml = this.renderSuperimposeAnimation(correctOpt ? correctOpt.id : null, true);
       overlay.innerHTML = `
         <div class="feedback-emoji">🤖</div>
         <div class="feedback-title wrong">${autoAnnotate('發條貓搶先送出點心！')}</div>
@@ -1345,6 +1537,7 @@ const Game1Manager = {
           ${autoAnnotate(`咔嚓咔嚓！機械發條貓手速超快，搶先為 ${customer} 送上了平分的點心！`)}<br>
           <span style="font-size:0.95rem; color:#6A1B9A;">🤖 發條貓示範：正確答案是【${correctOpt.title}】喔！</span>
         </div>
+        ${superimposeHtml}
         <button class="standard-btn primary-btn" id="btn-next-ai-q">搶下一張單 ➡️</button>
       `;
     } else {
@@ -1366,13 +1559,14 @@ const Game1Manager = {
     });
   },
 
-  showAiFeedback(isCorrect, titleStr, customer) {
+  showAiFeedback(isCorrect, titleStr, customer, optId) {
     AiRushManager.pause(); // 答題時先暫停發條貓
     const container = document.querySelector('.game-card-main');
     if (container.querySelector('.feedback-overlay')) return;
     
     const overlay = document.createElement('div');
     overlay.className = 'feedback-overlay';
+    const superimposeHtml = this.renderSuperimposeAnimation(optId, isCorrect);
     
     if (isCorrect) {
       AiRushManager.cleanup();
@@ -1385,6 +1579,7 @@ const Game1Manager = {
         <div class="feedback-reason">
           ${autoAnnotate(`太厲害了！${customer} 開心地收下了平分的美味點心，給了你一顆星星！`)}
         </div>
+        ${superimposeHtml}
         <button class="standard-btn primary-btn" id="btn-next-ai-q">下一位客人 ➡️</button>
       `;
       container.appendChild(overlay);
@@ -1400,6 +1595,7 @@ const Game1Manager = {
         <div class="feedback-reason">
           ${autoAnnotate('這個圖形沒有平分喔！手忙腳亂整理櫃檯中，發條貓正在逼近！')}
         </div>
+        ${superimposeHtml}
         <button class="standard-btn secondary-btn" id="btn-retry-ai-pick">趕快重新選擇 ⚡</button>
       `;
       container.appendChild(overlay);
@@ -1454,7 +1650,7 @@ const Game1Manager = {
           <!-- 選項網格 -->
           <div class="detective-choices">
             ${options.map((opt, i) => `
-              <div class="detective-choice-card" data-equal="${opt.isEqual}" data-title="${opt.title}">
+              <div class="detective-choice-card" data-id="${opt.id}" data-equal="${opt.isEqual}" data-title="${opt.title}">
                 <div class="choice-svg-wrap">${opt.draw()}</div>
                 <div class="choice-label-text">${autoAnnotate('圖形 ' + numToChinese[i+1])}</div>
               </div>
@@ -1480,14 +1676,15 @@ const Game1Manager = {
       card.addEventListener('click', (e) => {
         const isEqual = e.currentTarget.getAttribute('data-equal') === 'true';
         const titleStr = e.currentTarget.getAttribute('data-title');
+        const optId = e.currentTarget.getAttribute('data-id');
         
         // 顯示反饋覆蓋層
-        this.showSingleFeedback(isEqual, titleStr);
+        this.showSingleFeedback(isEqual, titleStr, optId);
       });
     });
   },
   
-  showSingleFeedback(isCorrect, titleStr) {
+  showSingleFeedback(isCorrect, titleStr, optId) {
     const container = document.querySelector('.game-card-main');
     
     // 避免重複點擊
@@ -1510,11 +1707,14 @@ const Game1Manager = {
       titleHtml = `<div class="feedback-title wrong">${autoAnnotate('答錯了～')}</div>`;
       reasonHtml = `<div class="feedback-reason">${autoAnnotate('哎呀！這個圖形切出來的大小不一樣，所以沒有「平分」喔。')}</div>`;
     }
+
+    const superimposeHtml = this.renderSuperimposeAnimation(optId, isCorrect);
     
     overlay.innerHTML = `
       <div class="feedback-emoji">${isCorrect ? '🎉' : '😢'}</div>
       ${titleHtml}
       ${reasonHtml}
+      ${superimposeHtml}
       <button class="standard-btn primary-btn" id="btn-next-q">下一題 ➡️</button>
     `;
     
@@ -1607,7 +1807,7 @@ const Game1Manager = {
         <!-- 選項顯示 (題目 100% 完整開源展示，尚未搶答前不可點擊) -->
         <div class="detective-choices" id="pvp-choices-grid" style="pointer-events: none; opacity: 0.85;">
           ${options.map((opt, i) => `
-            <div class="detective-choice-card" data-index="${i}">
+            <div class="detective-choice-card" data-index="${i}" data-id="${opt.id}">
               <div class="choice-svg-wrap">${opt.draw()}</div>
               <div class="choice-label-text">
                 <span class="key-badge">${i+1}</span>${autoAnnotate('圖形 ' + numToChinese[i+1])}
@@ -1717,7 +1917,7 @@ const Game1Manager = {
         card.onclick = (e) => {
           const idx = parseInt(e.currentTarget.getAttribute('data-index'));
           const opt = GameState.currentQuestionData.options[idx];
-          this.submitPvpAnswer(player, opt.isEqual);
+          this.submitPvpAnswer(player, opt.isEqual, opt.id);
         };
       });
     }
@@ -1742,7 +1942,7 @@ const Game1Manager = {
       if (selectedIndex !== null && GameState.currentQuestionData && GameState.currentQuestionData.options[selectedIndex]) {
         e.preventDefault();
         const opt = GameState.currentQuestionData.options[selectedIndex];
-        this.submitPvpAnswer(player, opt.isEqual);
+        this.submitPvpAnswer(player, opt.isEqual, opt.id);
       }
     };
 
@@ -1760,7 +1960,7 @@ const Game1Manager = {
     } else {
       // 雙方皆超時
       BattleManager.cleanup();
-      this.showPvpResultOverlay(null, false, true);
+      this.showPvpResultOverlay(null, false, true, null);
     }
   },
 
@@ -1768,14 +1968,14 @@ const Game1Manager = {
     this.buzz(newPlayer, true);
   },
   
-  submitPvpAnswer(player, isCorrect) {
+  submitPvpAnswer(player, isCorrect, optId) {
     if (isCorrect) {
       BattleManager.cleanup();
       AudioSynth.play('correct');
       AppManager.spawnConfetti();
       if (player === 'p1') GameState.p1Score++;
       else GameState.p2Score++;
-      this.showPvpResultOverlay(player, true, false);
+      this.showPvpResultOverlay(player, true, false, optId);
     } else {
       AudioSynth.play('wrong');
       // 答錯扣 1 分
@@ -1794,12 +1994,12 @@ const Game1Manager = {
       } else {
         // 雙方皆答錯
         BattleManager.cleanup();
-        this.showPvpResultOverlay(player, false, false);
+        this.showPvpResultOverlay(player, false, false, optId);
       }
     }
   },
 
-  showPvpResultOverlay(player, isCorrect, isTimeout = false) {
+  showPvpResultOverlay(player, isCorrect, isTimeout = false, optId = null) {
     BattleManager.cleanup();
     const mainCard = document.querySelector('.game-card-main');
     if (!mainCard) return;
@@ -1821,6 +2021,8 @@ const Game1Manager = {
       titleStr = autoAnnotate('雙方皆未答對～');
       reasonStr = autoAnnotate('哎呀！這幾種切法沒有平分，下一題再接再厲！');
     }
+
+    const superimposeHtml = optId ? this.renderSuperimposeAnimation(optId, isCorrect) : '';
     
     overlay.innerHTML = `
       <div class="feedback-emoji">${isCorrect ? '🎉' : '😢'}</div>
@@ -1830,6 +2032,7 @@ const Game1Manager = {
       <div class="feedback-reason">
         ${reasonStr}
       </div>
+      ${superimposeHtml}
       <button class="standard-btn primary-btn" id="btn-next-pvp-q">下一題 ➡️</button>
     `;
     mainCard.appendChild(overlay);
@@ -2063,7 +2266,10 @@ const Game2Manager = {
           </div>
           
           <!-- SVG 畫布 -->
-          <div class="visual-panel" style="border: none; box-shadow: none; padding: 0; min-height: unset; margin: 16px 0;">
+          <div class="visual-panel" style="border: none; box-shadow: none; padding: 0; min-height: unset; margin: 12px 0;">
+            <div id="maker-unit-anchor" class="unit-anchor-banner compact">
+              ${SVGRenderer.drawUnitWholeAnchor(order.shape, this.singleState.divider, false)}
+            </div>
             <div class="svg-container" id="maker-svg-wrap" style="max-width: 200px; height: 200px;"></div>
             
             <div class="fraction-display-card" style="margin-top: 12px; padding: 6px 18px;">
@@ -2245,7 +2451,10 @@ const Game2Manager = {
           </div>
           
           <!-- SVG 畫布 -->
-          <div class="visual-panel" style="border: none; box-shadow: none; padding: 0; min-height: unset; margin: 16px 0;">
+          <div class="visual-panel" style="border: none; box-shadow: none; padding: 0; min-height: unset; margin: 12px 0;">
+            <div id="maker-unit-anchor" class="unit-anchor-banner compact">
+              ${SVGRenderer.drawUnitWholeAnchor(order.shape, this.singleState.divider, false)}
+            </div>
             <div class="svg-container" id="maker-svg-wrap" style="max-width: 200px; height: 200px;">
               <!-- 透過 renderMakerSvg 動態塞入 -->
             </div>
@@ -2313,6 +2522,11 @@ const Game2Manager = {
       numId = 'maker-num';
       denId = 'maker-den';
       nameId = 'maker-fraction-name';
+      // 優化一：同步更新單人/AI 模式的單位 1 常駐視覺錨定
+      const makerAnchorEl = document.getElementById('maker-unit-anchor');
+      if (makerAnchorEl) {
+        makerAnchorEl.innerHTML = SVGRenderer.drawUnitWholeAnchor(order.shape, state.divider, false);
+      }
     } else if (player === 'p1') {
       state = this.p1State;
       wrapId = 'pvp-svg-wrap-p1';
@@ -2453,9 +2667,12 @@ const Game2Manager = {
 
       <!-- 頂部共用題目區 (100% 開放清楚顯示) -->
       <div class="game-card-main" style="margin-bottom: 12px; padding: 16px 24px;">
-        <div class="question-text-box" style="margin-bottom: 0;">
+        <div class="question-text-box" style="margin-bottom: 8px;">
           <button class="question-speak-btn" id="btn-pvp-q2-speak">🔊</button>
           <span style="font-size:1.15rem;">${autoAnnotate(qText)}</span>
+        </div>
+        <div class="unit-anchor-banner compact" style="margin-bottom: 0;">
+          ${SVGRenderer.drawUnitWholeAnchor(order.shape, order.targetDen, true)}
         </div>
       </div>
       

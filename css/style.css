@@ -1980,5 +1980,209 @@ body {
   margin-top: 10px;
 }
 
+/* ==================== 優化一：單位 1（完整點心）常駐視覺錨定 ==================== */
+.unit-anchor-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  background: linear-gradient(135deg, #FFFDF7, #FFF8E1);
+  border: 2px dashed #FFB300;
+  border-radius: 16px;
+  padding: 8px 16px;
+  margin-bottom: 10px;
+  box-shadow: 0 3px 10px rgba(255, 179, 0, 0.12);
+  width: 100%;
+  max-width: 480px;
+}
+
+.unit-anchor-banner.compact {
+  padding: 6px 12px;
+  margin: 0 auto 8px auto;
+  max-width: 420px;
+}
+
+.unit-anchor-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.unit-anchor-svg {
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 4px rgba(141, 110, 99, 0.2));
+}
+
+.unit-anchor-svg.rect-svg {
+  width: 64px;
+  height: 36px;
+}
+
+.unit-anchor-svg svg {
+  width: 100%;
+  height: 100%;
+}
+
+.unit-anchor-label {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #5D4037;
+  line-height: 1.35;
+}
+
+.unit-anchor-label .whole-highlight {
+  color: #D84315;
+  background: #FFE0B2;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 800;
+}
+
+.unit-anchor-arrow {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #F57C00;
+  background: #FFF3E0;
+  border: 1.5px solid #FFCC80;
+  padding: 3px 10px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ==================== 優化二：關卡一「拿起來疊疊看」疊合重疊驗證動畫 ==================== */
+.superimpose-box {
+  background: #FFFDF9;
+  border: 2.5px solid #FFE082;
+  border-radius: 16px;
+  padding: 10px 16px;
+  margin: 8px auto 12px auto;
+  max-width: 340px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 12px rgba(141, 110, 99, 0.14);
+}
+
+.superimpose-box.is-equal {
+  border-color: #81C784;
+  background: #F1F8E9;
+}
+
+.superimpose-box.is-unequal {
+  border-color: #EF9A9A;
+  background: #FFF8F8;
+}
+
+.superimpose-header {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #5D4037;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.superimpose-stage {
+  width: 220px;
+  height: 115px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.superimpose-stage svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.superimpose-caption {
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.superimpose-caption.eq-text {
+  color: #2E7D32;
+  background: #C8E6C9;
+}
+
+.superimpose-caption.neq-text {
+  color: #C62828;
+  background: #FFCDD2;
+}
+
+/* 上層切片滑動重疊動畫 */
+@keyframes pieceSlideToOverlap {
+  0%, 15% {
+    transform: translate(var(--start-x, 58px), var(--start-y, 0px));
+    opacity: 0.95;
+  }
+  55%, 90% {
+    transform: translate(0px, 0px);
+    opacity: 0.92;
+  }
+  100% {
+    transform: translate(0px, 0px);
+    opacity: 0.92;
+  }
+}
+
+.superimpose-moving {
+  animation: pieceSlideToOverlap 2.4s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+}
+
+/* 不平分多出區域紅光閃爍動畫 */
+@keyframes diffAreaPulse {
+  0%, 35% {
+    opacity: 0.15;
+  }
+  55%, 90% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0.25;
+  }
+}
+
+.superimpose-diff {
+  animation: diffAreaPulse 2.4s ease-in-out infinite;
+}
+
+/* 疊合動畫彈窗空間自適應調整 */
+.feedback-overlay:has(.superimpose-box) {
+  overflow-y: auto;
+  padding: 14px 20px;
+}
+
+.feedback-overlay:has(.superimpose-box) .feedback-emoji {
+  font-size: 3.2rem;
+  margin-bottom: 4px;
+}
+
+.feedback-overlay:has(.superimpose-box) .feedback-title {
+  font-size: 1.5rem;
+  margin-bottom: 4px;
+}
+
+.feedback-overlay:has(.superimpose-box) .feedback-reason {
+  font-size: 1.05rem;
+  margin-bottom: 8px;
+}
+
+
+
 
 
