@@ -33,6 +33,6 @@
 - 切換畫面與關卡重開時皆會由 `AiRushManager.cleanup()` 徹底銷毀計時器，絕無背景洩漏。
 
 ## 🕐 最後更新
-- 時間：2026-10-24 16:58
+- 時間：2026-10-24 17:05
 - 更新者：Google Antigravity @ LAPTOP-C73KGKMS
-- Git push：✅ 已推至 `linjingsiou-byte/grade2-math-fraction-game` (Commit: `804a159`)
+- Git push：✅ 已推至 `linjingsiou-byte/grade2-math-fraction-game` (Commit: `55b0603`)
