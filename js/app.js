@@ -148,7 +148,21 @@ const AudioSynth = {
 
 // 3. 語音朗讀系統 (Web Speech API)
 const SpeechEngine = {
+  cleanText(text) {
+    if (!text) return '';
+    return text
+      // 移除常見 Emoji 與特殊符號
+      .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+      .replace(/[➡️⚡⭐📦🎉😢✨❌🔍📐🤖🐱🐰🐿️🦔🦊🦌🦝💨]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  },
+
   speak(htmlOrPlainText) {
+    if (!htmlOrPlainText) return;
+    // 0. 清洗 Emoji 與干擾文字
+    htmlOrPlainText = this.cleanText(htmlOrPlainText);
+
     // 1. 先將 HTML 形式的分數轉換回標準 "1/N" 格式方便朗讀
     let text = htmlOrPlainText.replace(/<span class="math-fraction"><span class="num">1<\/span><span class="bar"><\/span><span class="den">(\d+)<\/span><\/span>/g, "1/$1");
     
@@ -754,6 +768,17 @@ const AppManager = {
       if (e.target.id === 'modal-secrets') {
         AudioSynth.play('click');
         document.getElementById('modal-secrets').classList.remove('active');
+      }
+    });
+
+    // 鍵盤 Escape 鍵快速關閉秘笈彈窗 (提升電腦載具無障礙體驗)
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('modal-secrets');
+        if (modal && modal.classList.contains('active')) {
+          AudioSynth.play('click');
+          modal.classList.remove('active');
+        }
       }
     });
     
@@ -2692,19 +2717,19 @@ const Game2Manager = {
               <div class="fraction-bar" style="width: 18px;"></div>
               <div id="pvp-den-p1">4</div>
             </div>
-            <div class="fraction-name" id="pvp-name-p1" style="font-size: 0.9rem;">(請點選 1 份)</div>
+            <div class="fraction-name" id="pvp-name-p1" style="font-size: 1rem;">(請點選 1 份)</div>
           </div>
           
           <div class="maker-operation-area" style="margin-top: 16px;">
             <div class="maker-slider-group" style="padding: 6px 12px; gap: 8px; max-width: 260px;">
-              <label style="font-size:0.9rem;">切割：</label>
+              <label style="font-size: 1rem;">切割：</label>
               <input type="range" id="pvp-range-p1" min="2" max="12" value="4" step="1">
-              <span class="range-value-bubble" id="pvp-bubble-p1" style="min-width: 38px; padding: 3px 6px; font-size: 0.85rem;">4</span>
+              <span class="range-value-bubble" id="pvp-bubble-p1" style="min-width: 38px; padding: 3px 6px; font-size: 1rem;">4</span>
             </div>
             <button class="play-btn blue-btn" id="btn-pvp-submit-p1" style="font-size: 1rem; padding: 8px 0; margin-top: 10px;">
               送出點心 🐱
             </button>
-            <div id="pvp-lock-msg-p1" style="color: red; font-size: 0.85rem; height: 20px;"></div>
+            <div id="pvp-lock-msg-p1" style="color: red; font-size: 1rem; height: 20px;"></div>
           </div>
         </div>
         
@@ -2723,19 +2748,19 @@ const Game2Manager = {
               <div class="fraction-bar" style="width: 18px;"></div>
               <div id="pvp-den-p2">4</div>
             </div>
-            <div class="fraction-name" id="pvp-name-p2" style="font-size: 0.9rem;">(請點選 1 份)</div>
+            <div class="fraction-name" id="pvp-name-p2" style="font-size: 1rem;">(請點選 1 份)</div>
           </div>
           
           <div class="maker-operation-area" style="margin-top: 16px;">
             <div class="maker-slider-group" style="padding: 6px 12px; gap: 8px; max-width: 260px;">
-              <label style="font-size:0.9rem;">切割：</label>
+              <label style="font-size: 1rem;">切割：</label>
               <input type="range" id="pvp-range-p2" min="2" max="12" value="4" step="1">
-              <span class="range-value-bubble" id="pvp-bubble-p2" style="min-width: 38px; padding: 3px 6px; font-size: 0.85rem;">4</span>
+              <span class="range-value-bubble" id="pvp-bubble-p2" style="min-width: 38px; padding: 3px 6px; font-size: 1rem;">4</span>
             </div>
             <button class="play-btn pink-btn" id="btn-pvp-submit-p2" style="font-size: 1rem; padding: 8px 0; margin-top: 10px;">
               送出點心 🐰
             </button>
-            <div id="pvp-lock-msg-p2" style="color: red; font-size: 0.85rem; height: 20px;"></div>
+            <div id="pvp-lock-msg-p2" style="color: red; font-size: 1rem; height: 20px;"></div>
           </div>
         </div>
       </div>
