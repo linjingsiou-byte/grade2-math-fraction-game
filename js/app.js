@@ -1817,55 +1817,58 @@ const Game1Manager = {
         </div>
       </div>
 
-      <div class="pvp-split-layout">
-        <!-- 玩家一 (藍貓) -->
-        <div class="pvp-player-panel p1" id="pvp-panel-p1">
+      <!-- 雙人對決一屏全覽競技場 (3-Column Zero-Scroll Arena) -->
+      <div class="duel-arena-layout">
+        <!-- 左欄：玩家一 (藍貓隊) -->
+        <div class="pvp-player-panel p1 cooling" id="pvp-panel-p1">
           <div class="player-panel-header">
             <div class="player-info p1-name">🐱 藍貓隊</div>
             <div class="player-score" id="pvp-score-p1">${GameState.p1Score} / ${GameState.pvpMaxScore} 分</div>
           </div>
           <div class="pvp-buzz-area">
             <button class="pvp-buzz-btn cooling" id="btn-buzz-p1">
-              <span>🐱</span>
-              <span>搶答</span>
+              <span class="buzz-emoji">🐱</span>
+              <span class="buzz-text">搶答</span>
             </button>
+            <div class="buzz-key-badge">A 鍵 / 空白鍵</div>
             <div class="pvp-action-msg" id="msg-p1">請看題思考...</div>
           </div>
         </div>
-        
-        <!-- 玩家二 (紅兔) -->
-        <div class="pvp-player-panel p2" id="pvp-panel-p2">
+
+        <!-- 中欄：題目與答案選項舞台 -->
+        <div class="game-card-main duel-center-card" id="duel-center-stage">
+          <div class="question-text-box">
+            <button class="question-speak-btn" id="btn-pvp-q1-speak">🔊</button>
+            <span>${autoAnnotate(GameState.currentQuestionData.questionText)}</span>
+          </div>
+          
+          <!-- 選項顯示 (題目 100% 完整開源展示，尚未搶答前不可點擊) -->
+          <div class="detective-choices" id="pvp-choices-grid" style="pointer-events: none; opacity: 0.85;">
+            ${options.map((opt, i) => `
+              <div class="detective-choice-card" data-index="${i}" data-id="${opt.id}">
+                <div class="choice-svg-wrap">${opt.draw()}</div>
+                <div class="choice-label-text">
+                  <span class="key-badge">${i+1}</span>${autoAnnotate('圖形 ' + numToChinese[i+1])}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- 右欄：玩家二 (紅兔隊) -->
+        <div class="pvp-player-panel p2 cooling" id="pvp-panel-p2">
           <div class="player-panel-header">
             <div class="player-info p2-name">🐰 紅兔隊</div>
             <div class="player-score" id="pvp-score-p2">${GameState.p2Score} / ${GameState.pvpMaxScore} 分</div>
           </div>
           <div class="pvp-buzz-area">
             <button class="pvp-buzz-btn cooling" id="btn-buzz-p2">
-              <span>🐰</span>
-              <span>搶答</span>
+              <span class="buzz-emoji">🐰</span>
+              <span class="buzz-text">搶答</span>
             </button>
+            <div class="buzz-key-badge">L 鍵 / Enter</div>
             <div class="pvp-action-msg" id="msg-p2">請看題思考...</div>
           </div>
-        </div>
-      </div>
-      
-      <!-- 中央共用題目板 -->
-      <div class="game-card-main" style="margin-top: 20px; min-height: 250px;">
-        <div class="question-text-box">
-          <button class="question-speak-btn" id="btn-pvp-q1-speak">🔊</button>
-          <span>${autoAnnotate(GameState.currentQuestionData.questionText)}</span>
-        </div>
-        
-        <!-- 選項顯示 (題目 100% 完整開源展示，尚未搶答前不可點擊) -->
-        <div class="detective-choices" id="pvp-choices-grid" style="pointer-events: none; opacity: 0.85;">
-          ${options.map((opt, i) => `
-            <div class="detective-choice-card" data-index="${i}" data-id="${opt.id}">
-              <div class="choice-svg-wrap">${opt.draw()}</div>
-              <div class="choice-label-text">
-                <span class="key-badge">${i+1}</span>${autoAnnotate('圖形 ' + numToChinese[i+1])}
-              </div>
-            </div>
-          `).join('')}
         </div>
       </div>
     `;
@@ -1887,15 +1890,19 @@ const Game1Manager = {
       onSetCooling: (isCooling) => {
         const b1 = document.getElementById('btn-buzz-p1');
         const b2 = document.getElementById('btn-buzz-p2');
+        const p1 = document.getElementById('pvp-panel-p1');
+        const p2 = document.getElementById('pvp-panel-p2');
         if (b1) b1.classList.toggle('cooling', isCooling);
         if (b2) b2.classList.toggle('cooling', isCooling);
+        if (p1) p1.classList.toggle('cooling', isCooling);
+        if (p2) p2.classList.toggle('cooling', isCooling);
       },
       onThinkingComplete: () => {
         GameState.pvpLocked = false;
         const msg1 = document.getElementById('msg-p1');
         const msg2 = document.getElementById('msg-p2');
-        if (msg1) msg1.innerHTML = autoAnnotate('⚡ 開放搶答！(按 A鍵 或 點擊)');
-        if (msg2) msg2.innerHTML = autoAnnotate('⚡ 開放搶答！(按 L鍵 或 點擊)');
+        if (msg1) msg1.innerHTML = autoAnnotate('⚡ 開放搶答！快按搶答鈕！');
+        if (msg2) msg2.innerHTML = autoAnnotate('⚡ 開放搶答！快按搶答鈕！');
       }
     });
     
@@ -2732,7 +2739,7 @@ const Game2Manager = {
       </div>
 
       <!-- 頂部共用題目區 (100% 開放清楚顯示) -->
-      <div class="game-card-main" style="margin-bottom: 12px; padding: 16px 24px;">
+      <div class="game-card-main" style="margin-bottom: 8px; padding: 10px 18px;">
         <div class="question-text-box" style="margin-bottom: 8px;">
           <button class="question-speak-btn" id="btn-pvp-q2-speak">🔊</button>
           <span style="font-size:1.15rem;">${autoAnnotate(qText)}</span>
@@ -2750,7 +2757,7 @@ const Game2Manager = {
             <div class="player-score">${GameState.p1Score} / ${GameState.pvpMaxScore} 分</div>
           </div>
           
-          <div class="svg-container" id="pvp-svg-wrap-p1" style="max-width: 160px; height: 160px;"></div>
+          <div class="svg-container" id="pvp-svg-wrap-p1" style="max-width: 140px; height: 140px;"></div>
           
           <div class="fraction-display-card" style="margin-top: 8px; padding: 4px 12px; gap: 10px;">
             <div class="fraction-formula" style="font-size: 1.15rem;">
@@ -2781,7 +2788,7 @@ const Game2Manager = {
             <div class="player-score">${GameState.p2Score} / ${GameState.pvpMaxScore} 分</div>
           </div>
           
-          <div class="svg-container" id="pvp-svg-wrap-p2" style="max-width: 160px; height: 160px;"></div>
+          <div class="svg-container" id="pvp-svg-wrap-p2" style="max-width: 140px; height: 140px;"></div>
           
           <div class="fraction-display-card" style="margin-top: 8px; padding: 4px 12px; gap: 10px;">
             <div class="fraction-formula" style="font-size: 1.15rem;">
@@ -3537,74 +3544,77 @@ const Game3Manager = {
         </div>
       </div>
 
-      <div class="pvp-split-layout">
-        <!-- 玩家一 (藍貓) -->
-        <div class="pvp-player-panel p1" id="pvp3-panel-p1">
+      <!-- 雙人對決一屏全覽競技場 (3-Column Zero-Scroll Arena) -->
+      <div class="duel-arena-layout">
+        <!-- 左欄：玩家一 (藍貓隊) -->
+        <div class="pvp-player-panel p1 cooling" id="pvp3-panel-p1">
           <div class="player-panel-header">
             <div class="player-info p1-name">🐱 藍貓隊</div>
             <div class="player-score" id="pvp3-score-p1">${GameState.p1Score} / ${GameState.pvpMaxScore} 分</div>
           </div>
           <div class="pvp-buzz-area">
             <button class="pvp-buzz-btn cooling" id="btn-buzz3-p1">
-              <span>🐱</span>
-              <span>搶答</span>
+              <span class="buzz-emoji">🐱</span>
+              <span class="buzz-text">搶答</span>
             </button>
+            <div class="buzz-key-badge">A 鍵 / 空白鍵</div>
             <div class="pvp-action-msg" id="msg3-p1">請看題思考...</div>
           </div>
         </div>
-        
-        <!-- 玩家二 (紅兔) -->
-        <div class="pvp-player-panel p2" id="pvp3-panel-p2">
+
+        <!-- 中欄：題目與答案選項舞台 -->
+        <div class="game-card-main duel-center-card" id="duel-center-stage-3">
+          <div class="question-text-box" style="flex-direction: column; gap: 4px; margin-bottom: 8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <button class="question-speak-btn" id="btn-pvp-q3-speak">🔊</button>
+              <span style="font-weight:700; font-size:1.15rem;">${autoAnnotate('誰吃得比較多？')}</span>
+            </div>
+            <p style="font-size:0.95rem; color:var(--color-text-muted); line-height:1.5; margin:0;">
+              ${autoAnnotate(`小熊樂樂和小貓咪咪拿了相同大小的${shapeNameStr}。<br>小熊樂樂吃了 <span class="math-fraction"><span class="num">1</span><span class="bar"></span><span class="den">${q.den1}</span></span> <span class="unit-ge">${shapeUnitStr}</span>，小貓咪咪吃了 <span class="math-fraction"><span class="num">1</span><span class="bar"></span><span class="den">${q.den2}</span></span> <span class="unit-ge">${shapeUnitStr}</span>。`)}
+            </p>
+          </div>
+          
+          <!-- 左右卡片選項 (搶答前不可點擊) -->
+          <div class="comparison-options" id="pvp3-choices" style="pointer-events: none; opacity: 0.85; width:100%;">
+            <!-- 小熊樂樂 (1/den1) -->
+            <div class="comparison-option-card" id="pvp3-opt-bear" data-target="bear" style="flex:1;">
+              <span class="option-character">🐻</span>
+              <span class="choice-label-text"><span class="key-badge">1</span>小熊樂樂</span>
+              <div class="option-svg-wrap" style="width:75px; height:75px;">
+                ${q.shape === 'circle' ? SVGRenderer.drawCircleFraction(q.den1, 0) : SVGRenderer.drawRectFraction(q.den1, 0)}
+              </div>
+              <div class="option-fraction-label">
+                <div class="text-fraction" style="font-size:1.15rem;"><span>1</span><span></span><span>${q.den1}</span></div>
+              </div>
+            </div>
+            
+            <!-- 小貓咪咪 (1/den2) -->
+            <div class="comparison-option-card" id="pvp3-opt-cat" data-target="cat" style="flex:1;">
+              <span class="option-character">🐱</span>
+              <span class="choice-label-text"><span class="key-badge">2</span>小貓咪咪</span>
+              <div class="option-svg-wrap" style="width:75px; height:75px;">
+                ${q.shape === 'circle' ? SVGRenderer.drawCircleFraction(q.den2, 0) : SVGRenderer.drawRectFraction(q.den2, 0)}
+              </div>
+              <div class="option-fraction-label">
+                <div class="text-fraction" style="font-size:1.15rem;"><span>1</span><span></span><span>${q.den2}</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右欄：玩家二 (紅兔隊) -->
+        <div class="pvp-player-panel p2 cooling" id="pvp3-panel-p2">
           <div class="player-panel-header">
             <div class="player-info p2-name">🐰 紅兔隊</div>
             <div class="player-score" id="pvp3-score-p2">${GameState.p2Score} / ${GameState.pvpMaxScore} 分</div>
           </div>
           <div class="pvp-buzz-area">
             <button class="pvp-buzz-btn cooling" id="btn-buzz3-p2">
-              <span>🐰</span>
-              <span>搶答</span>
+              <span class="buzz-emoji">🐰</span>
+              <span class="buzz-text">搶答</span>
             </button>
+            <div class="buzz-key-badge">L 鍵 / Enter</div>
             <div class="pvp-action-msg" id="msg3-p2">請看題思考...</div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 中央比對板 (100% 完整開源展示) -->
-      <div class="game-card-main" style="margin-top: 20px; min-height: 280px;">
-        <div class="question-text-box" style="flex-direction: column; gap: 4px; margin-bottom: 16px;">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <button class="question-speak-btn" id="btn-pvp-q3-speak">🔊</button>
-            <span style="font-weight:700; font-size:1.2rem;">${autoAnnotate('誰吃得比較多？')}</span>
-          </div>
-          <p style="font-size:0.95rem; color:var(--color-text-muted); line-height:1.7;">
-            ${autoAnnotate(`小熊樂樂和小貓咪咪拿了相同大小的${shapeNameStr}。<br>小熊樂樂吃了 <span class="math-fraction"><span class="num">1</span><span class="bar"></span><span class="den">${q.den1}</span></span> <span class="unit-ge">${shapeUnitStr}</span>，小貓咪咪吃了 <span class="math-fraction"><span class="num">1</span><span class="bar"></span><span class="den">${q.den2}</span></span> <span class="unit-ge">${shapeUnitStr}</span>。`)}
-          </p>
-        </div>
-        
-        <!-- 左右卡片選項 (搶答前不可點擊) -->
-        <div class="comparison-options" id="pvp3-choices" style="pointer-events: none; opacity: 0.85; width:100%;">
-          <!-- 小熊樂樂 (1/den1) -->
-          <div class="comparison-option-card" id="pvp3-opt-bear" data-target="bear" style="flex:1;">
-            <span class="option-character">🐻</span>
-            <span class="choice-label-text"><span class="key-badge">1</span>小熊樂樂</span>
-            <div class="option-svg-wrap" style="width:90px; height:90px;">
-              ${q.shape === 'circle' ? SVGRenderer.drawCircleFraction(q.den1, 0) : SVGRenderer.drawRectFraction(q.den1, 0)}
-            </div>
-            <div class="option-fraction-label">
-              <div class="text-fraction" style="font-size:1.15rem;"><span>1</span><span></span><span>${q.den1}</span></div>
-            </div>
-          </div>
-          
-          <!-- 小貓咪咪 (1/den2) -->
-          <div class="comparison-option-card" id="pvp3-opt-cat" data-target="cat" style="flex:1;">
-            <span class="option-character">🐱</span>
-            <span class="choice-label-text"><span class="key-badge">2</span>小貓咪咪</span>
-            <div class="option-svg-wrap" style="width:90px; height:90px;">
-              ${q.shape === 'circle' ? SVGRenderer.drawCircleFraction(q.den2, 0) : SVGRenderer.drawRectFraction(q.den2, 0)}
-            </div>
-            <div class="option-fraction-label">
-              <div class="text-fraction" style="font-size:1.15rem;"><span>1</span><span></span><span>${q.den2}</span></div>
-            </div>
           </div>
         </div>
       </div>
@@ -3627,15 +3637,19 @@ const Game3Manager = {
       onSetCooling: (isCooling) => {
         const b1 = document.getElementById('btn-buzz3-p1');
         const b2 = document.getElementById('btn-buzz3-p2');
+        const p1 = document.getElementById('pvp3-panel-p1');
+        const p2 = document.getElementById('pvp3-panel-p2');
         if (b1) b1.classList.toggle('cooling', isCooling);
         if (b2) b2.classList.toggle('cooling', isCooling);
+        if (p1) p1.classList.toggle('cooling', isCooling);
+        if (p2) p2.classList.toggle('cooling', isCooling);
       },
       onThinkingComplete: () => {
         GameState.pvpLocked = false;
         const msg1 = document.getElementById('msg3-p1');
         const msg2 = document.getElementById('msg3-p2');
-        if (msg1) msg1.innerHTML = autoAnnotate('⚡ 開放搶答！(按 A鍵 或 點擊)');
-        if (msg2) msg2.innerHTML = autoAnnotate('⚡ 開放搶答！(按 L鍵 或 點擊)');
+        if (msg1) msg1.innerHTML = autoAnnotate('⚡ 開放搶答！快按搶答鈕！');
+        if (msg2) msg2.innerHTML = autoAnnotate('⚡ 開放搶答！快按搶答鈕！');
       }
     });
     
