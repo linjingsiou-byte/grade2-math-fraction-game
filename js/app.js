@@ -235,6 +235,23 @@ const BattleManager = {
     void el.offsetWidth;
     el.classList.add('shake-warn');
     AudioSynth.playSoftClick();
+
+    // 偷跑警告提示文案
+    const statusText = document.getElementById('battle-status-text');
+    const statusBar = document.getElementById('battle-status-bar');
+    if (statusText && this.isThinkingPhase) {
+      statusText.innerHTML = '⏳ <strong>請先讀題思考喔！倒數結束後才開放作答！</strong>';
+      if (statusBar) statusBar.classList.add('warning');
+      setTimeout(() => {
+        if (this.isThinkingPhase && statusText.innerHTML.includes('請先讀題思考')) {
+          const timerEl = document.getElementById('battle-status-timer');
+          const remSec = timerEl ? timerEl.textContent : '3.0';
+          statusText.innerHTML = `仔細看題思考中... <strong id="battle-status-timer">${remSec}</strong> 秒後開放作答！`;
+          if (statusBar) statusBar.classList.remove('warning');
+        }
+      }, 1200);
+    }
+
     setTimeout(() => {
       el.classList.remove('shake-warn');
     }, 450);
@@ -256,8 +273,7 @@ const BattleManager = {
     }
     if (statusIcon) statusIcon.textContent = '⏳';
     if (statusText) {
-      const modeHint = options.game === 'game2' ? '開放競速' : '開放搶答';
-      statusText.innerHTML = `仔細看題思考中... <strong id="battle-status-timer">${durationSec.toFixed(1)}</strong> 秒後${modeHint}！`;
+      statusText.innerHTML = `仔細看題思考中... <strong id="battle-status-timer">${durationSec.toFixed(1)}</strong> 秒後開放作答！`;
     }
     if (progressFill) {
       progressFill.style.transition = 'none';
@@ -298,9 +314,9 @@ const BattleManager = {
         if (statusIcon) statusIcon.textContent = '⚡';
         if (statusText) {
           if (options.game === 'game2') {
-            statusText.innerHTML = '⚡ <strong>烘焙競速開始！</strong>快動手切割點心並送出！';
+            statusText.innerHTML = '⚡ <strong>競速開始！</strong>快動手計算並提交配方！';
           } else {
-            statusText.innerHTML = '⚡ <strong>搶答開始！</strong>快按搶答鈕（貓咪 A鍵/空白鍵 ｜ 兔子 L鍵/Enter鍵）！';
+            statusText.innerHTML = '⚡ <strong>競速開始！</strong>快按搶答鈕作答！（貓咪 A鍵/空白鍵 ｜ 兔子 L鍵/Enter鍵）';
           }
         }
 
@@ -782,6 +798,14 @@ const AppManager = {
       }
     });
     
+    const toggleDuelRules = (show) => {
+      const el = document.getElementById('duel-special-rules');
+      if (el) {
+        if (show) el.classList.remove('hide');
+        else el.classList.add('hide');
+      }
+    };
+
     // 選擇模式
     document.getElementById('card-mode-single').addEventListener('click', () => {
       AudioSynth.play('click');
@@ -789,6 +813,7 @@ const AppManager = {
       document.getElementById('player-mode-badge').innerText = "單人自主學習";
       document.getElementById('player-mode-badge').className = "badge bg-pink";
       document.getElementById('ai-difficulty-selector').classList.add('hide');
+      toggleDuelRules(false);
       this.showScreen('screen-menu');
     });
 
@@ -798,6 +823,7 @@ const AppManager = {
       document.getElementById('player-mode-badge').innerText = "單人 AI 挑戰賽";
       document.getElementById('player-mode-badge').className = "badge bg-purple";
       document.getElementById('ai-difficulty-selector').classList.remove('hide');
+      toggleDuelRules(false);
       this.showScreen('screen-menu');
     });
     
@@ -807,6 +833,7 @@ const AppManager = {
       document.getElementById('player-mode-badge').innerText = "雙人烘焙對決";
       document.getElementById('player-mode-badge').className = "badge bg-blue";
       document.getElementById('ai-difficulty-selector').classList.add('hide');
+      toggleDuelRules(true);
       this.showScreen('screen-menu');
     });
 
@@ -1890,6 +1917,20 @@ const Game1Manager = {
     // 點擊觸控搶答
     document.getElementById('btn-buzz-p1').addEventListener('click', () => this.attemptBuzz('p1'));
     document.getElementById('btn-buzz-p2').addEventListener('click', () => this.attemptBuzz('p2'));
+
+    // 思考期防偷跑點擊攔截器 (Capture 模式)
+    ['p1', 'p2'].forEach(p => {
+      const panel = document.getElementById(`pvp-panel-${p}`);
+      if (panel) {
+        panel.addEventListener('pointerdown', (e) => {
+          if (BattleManager.isThinkingPhase) {
+            e.preventDefault();
+            e.stopPropagation();
+            BattleManager.triggerShake(panel);
+          }
+        }, true);
+      }
+    });
   },
 
   attemptBuzz(player) {
@@ -2842,6 +2883,22 @@ const Game2Manager = {
       }
       this.submitPvpMaker('p2');
     };
+
+    // 思考期防偷跑點擊攔截器 (Capture 模式)
+    ['p1', 'p2'].forEach(p => {
+      const panel = document.getElementById(`maker-panel-${p}`);
+      if (panel) {
+        panel.addEventListener('pointerdown', (e) => {
+          if (BattleManager.isThinkingPhase) {
+            if (e.target.closest('input, button, .slice-path, .svg-container, .maker-slider-group')) {
+              e.preventDefault();
+              e.stopPropagation();
+              BattleManager.triggerShake(panel);
+            }
+          }
+        }, true);
+      }
+    });
   },
   
   submitPvpMaker(player) {
@@ -3563,10 +3620,10 @@ const Game3Manager = {
       SpeechEngine.speak(speechText);
     }
 
-    // 啟動 4.0 秒讀題思考緩衝期 (長故事題幹充裕兼顧 TTS 朗讀)
+    // 啟動 3.0 秒讀題思考緩衝期
     BattleManager.startThinkingPhase({
       game: 'game3',
-      durationSec: 4.0,
+      durationSec: 3.0,
       onSetCooling: (isCooling) => {
         const b1 = document.getElementById('btn-buzz3-p1');
         const b2 = document.getElementById('btn-buzz3-p2');
@@ -3599,6 +3656,20 @@ const Game3Manager = {
     
     document.getElementById('btn-buzz3-p1').onclick = () => this.attemptBuzz('p1');
     document.getElementById('btn-buzz3-p2').onclick = () => this.attemptBuzz('p2');
+
+    // 思考期防偷跑點擊攔截器 (Capture 模式)
+    ['p1', 'p2'].forEach(p => {
+      const panel = document.getElementById(`pvp3-panel-${p}`);
+      if (panel) {
+        panel.addEventListener('pointerdown', (e) => {
+          if (BattleManager.isThinkingPhase) {
+            e.preventDefault();
+            e.stopPropagation();
+            BattleManager.triggerShake(panel);
+          }
+        }, true);
+      }
+    });
   },
 
   attemptBuzz(player) {

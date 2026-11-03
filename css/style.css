@@ -1699,6 +1699,42 @@ body {
    12. 雙人對戰標準化優化樣式 (Fraction Battle Standard Optimizer)
    ========================================================================== */
 
+/* 雙人對決規格說明標籤 */
+.duel-special-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(255, 248, 225, 0.95);
+  border: 2px dashed #FFA000;
+  border-radius: var(--radius-md, 16px);
+  padding: 12px 18px;
+  margin: 12px auto 20px auto;
+  max-width: 680px;
+  box-shadow: 0 4px 12px rgba(255, 160, 0, 0.15);
+  transition: all 0.3s ease;
+}
+
+.duel-special-rules.hide {
+  display: none !important;
+}
+
+.rule-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #5D4037;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 160, 0, 0.3);
+}
+
+.rule-tag strong {
+  color: #D84315;
+}
+
 /* 對戰狀態指示列 */
 .battle-status-bar {
   position: relative;
